@@ -401,6 +401,9 @@ function HappyAgentBoundary(props: {
     statusBar: StatusBarStore;
     keepAwake: KeepAwakeStore;
     platform: "desktop" | "web";
+    orkestChatReference?: boolean;
+    orkestBoardUrl?: string;
+    orkestDossierUrl?: string;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
     router: HappyAgentRouter;
@@ -465,6 +468,13 @@ function HappyAgentBoundary(props: {
                 sidebarVisibility: props.sidebarVisibility,
                 attention: props.attention,
                 platform: props.platform,
+                ...(props.orkestChatReference === true ? { orkestChatReference: true } : {}),
+                ...(props.orkestBoardUrl === undefined
+                    ? {}
+                    : { orkestBoardUrl: props.orkestBoardUrl }),
+                ...(props.orkestDossierUrl === undefined
+                    ? {}
+                    : { orkestDossierUrl: props.orkestDossierUrl }),
                 happyAgents: props.happyAgents,
                 settings: props.settings,
                 titleShimmer: props.titleShimmer,
@@ -707,6 +717,9 @@ interface DesktopRendererProps {
     sidebarVisibility: HappyAgentSidebarVisibilityStore;
     attention: HappyAgentAttentionStore;
     platform: "desktop" | "web";
+    orkestChatReference?: boolean;
+    orkestBoardUrl?: string;
+    orkestDossierUrl?: string;
     happyAgentRouter: HappyAgentRouter;
     happyAgents: HappyAgentDirectoryStore;
     settings: HappyAgentSettingsStore;
@@ -1168,6 +1181,13 @@ function DesktopRuntimeContent(
             sidebarVisibility={props.sidebarVisibility}
             attention={props.attention}
             platform={props.platform}
+            orkestChatReference={props.orkestChatReference}
+            {...(props.orkestBoardUrl === undefined
+                ? {}
+                : { orkestBoardUrl: props.orkestBoardUrl })}
+            {...(props.orkestDossierUrl === undefined
+                ? {}
+                : { orkestDossierUrl: props.orkestDossierUrl })}
             router={props.happyAgentRouter}
             happyAgents={props.happyAgents}
             settings={props.settings}
@@ -1943,6 +1963,15 @@ if (mediaPreviewBridge) {
                         // Only the Electron window hides its title bar; the browser
                         // development server renders the same tree with web chrome.
                         platform={browserLocal ? "web" : "desktop"}
+                        orkestChatReference={
+                            browserLocal && import.meta.env.VITE_ORKEST_CHAT_REFERENCE === "1"
+                        }
+                        {...(browserLocal && import.meta.env.VITE_ORKEST_BOARD_URL
+                            ? { orkestBoardUrl: import.meta.env.VITE_ORKEST_BOARD_URL }
+                            : {})}
+                        {...(browserLocal && import.meta.env.VITE_ORKEST_DOSSIER_URL
+                            ? { orkestDossierUrl: import.meta.env.VITE_ORKEST_DOSSIER_URL }
+                            : {})}
                         happyAgentRouter={happyAgentRouter}
                         happyAgents={happyAgents}
                         localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
