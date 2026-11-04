@@ -51,6 +51,7 @@ import type {
 import {
     botFacePaint,
     SplashScreen,
+    orkestChatReferenceEnabled,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
     type LivePerformanceStore,
@@ -84,6 +85,12 @@ import type { AppHappyAgentReleaseNotesStore, AppHappyAgentUpdateStore } from ".
  * can be constructed before any Happy Agent connects.
  */
 export interface HappyAgentRouterContext {
+    /** Renderer-only Orkest chrome opt-in; the app still owns the chat runtime. */
+    readonly orkestChatReference?: boolean;
+    /** Explicit configured Board link, omitted when absent or invalid. */
+    readonly orkestBoardUrl?: string;
+    /** Explicit work-item Dossier link, omitted when absent or invalid. */
+    readonly orkestDossierUrl?: string;
     /** Whether this desktop fills logins saved in the person's browsers, whatever agent is connected. */
     readonly browserPasswordsAvailable?: boolean;
     /** A remote daemon uses its own setup inside this connection's router. */
@@ -590,6 +597,16 @@ function HappyAgentWorkspaceLayout() {
     return (
         <AppHappyAgentView
             appearance={context.appearance}
+            orkestChatReference={orkestChatReferenceEnabled(
+                context.orkestChatReference,
+                context.platform,
+            )}
+            {...(context.orkestBoardUrl === undefined
+                ? {}
+                : { orkestBoardUrl: context.orkestBoardUrl })}
+            {...(context.orkestDossierUrl === undefined
+                ? {}
+                : { orkestDossierUrl: context.orkestDossierUrl })}
             browserContent={context.browserContent}
             buildIdentity={context.buildIdentity}
             performance={context.performance}

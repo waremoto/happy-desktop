@@ -255,6 +255,7 @@ import {
     ConfirmPopover,
     Modal,
     ModalOverlay,
+    OrkestChatFrame,
     ReviewStream,
     HappyAgentActivityControl,
     HappyAgentActivityPanel,
@@ -775,6 +776,12 @@ export interface AppHappyAgentViewProps {
      * development mode keeps the ordinary branded heading.
      */
     platform?: "desktop" | "web";
+    /** Adds Orkest navigation around the existing workspace on an opted-in web renderer. */
+    orkestChatReference?: boolean;
+    /** Explicit configured Orkest Board address. */
+    orkestBoardUrl?: string;
+    /** Explicit configured Dossier address for the addressed work item. */
+    orkestDossierUrl?: string;
     /**
      * The window's own chrome. Entering macOS full screen takes the traffic
      * lights away, so the lane reserved for them closes with them and the sidebar
@@ -5238,54 +5245,66 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 keyed lifetimes inside its content region, so changing machines
                 resets machine-owned UI without rebuilding this sidebar's DOM,
                 focus, width, collapsed state, or scroll position. */}
-            <AppShell
-                sidebarCollapsible
-                {...(props.sidebarVisibility
-                    ? {
-                          sidebarCollapsed: sidebarVisibility.hidden,
-                          onSidebarCollapsedChange: sidebarVisibilityStore.sidebarHiddenUpdate,
-                          sidebarDefaultWidth: sidebarVisibility.width,
-                          onSidebarWidthChange: sidebarVisibilityStore.sidebarWidthUpdate,
-                      }
-                    : {})}
-                shortcutHints="interactive"
-                shortcutHintsSurface={paletteHints}
-                windowControls={desktop}
-                windowFullScreen={windowState.fullScreen}
-                windowTrafficLights={windowState.trafficLights}
-                connectionRail={windowState.connectionRail}
-                sidebar={spacesSidebar ?? sidebar}
-                // One band holds the sidebar toggle, search, and the tabs; the
-                // surface header is gone.
-                navigationChrome="integrated"
-                sidebarCollapsedLayout="overlay"
-                {...(props.commandPalette
-                    ? {
-                          sidebarSearchAction: {
-                              label: "Search",
-                              onClick: () => commandPaletteStore.paletteOpen(),
-                          },
-                      }
-                    : {})}
-                {...(spacesSidebar && stemCellsEnabled
-                    ? {
-                          sidebarCollapsedAction: {
-                              label: "Create (⌘N or ⌘T)",
-                              onClick: () => makeStuff(),
-                          },
-                          sidebarOwnsCreate: true,
-                      }
-                    : taskCreateTarget !== undefined
-                      ? {
-                            sidebarCollapsedAction: {
-                                label: "New task (⌘N)",
-                                onClick: () => props.onTaskCreateOpen?.(taskCreateTarget),
-                            },
-                        }
-                      : {})}
+            <OrkestChatFrame
+                {...(props.orkestBoardUrl === undefined ? {} : { boardUrl: props.orkestBoardUrl })}
+                {...(props.orkestDossierUrl === undefined
+                    ? {}
+                    : { dossierUrl: props.orkestDossierUrl })}
+                enabled={
+                    props.orkestChatReference === true &&
+                    props.platform === "web" &&
+                    props.groupId !== undefined
+                }
             >
-                {routeContent()}
-            </AppShell>
+                <AppShell
+                    sidebarCollapsible
+                    {...(props.sidebarVisibility
+                        ? {
+                              sidebarCollapsed: sidebarVisibility.hidden,
+                              onSidebarCollapsedChange: sidebarVisibilityStore.sidebarHiddenUpdate,
+                              sidebarDefaultWidth: sidebarVisibility.width,
+                              onSidebarWidthChange: sidebarVisibilityStore.sidebarWidthUpdate,
+                          }
+                        : {})}
+                    shortcutHints="interactive"
+                    shortcutHintsSurface={paletteHints}
+                    windowControls={desktop}
+                    windowFullScreen={windowState.fullScreen}
+                    windowTrafficLights={windowState.trafficLights}
+                    connectionRail={windowState.connectionRail}
+                    sidebar={spacesSidebar ?? sidebar}
+                    // One band holds the sidebar toggle, search, and the tabs; the
+                    // surface header is gone.
+                    navigationChrome="integrated"
+                    sidebarCollapsedLayout="overlay"
+                    {...(props.commandPalette
+                        ? {
+                              sidebarSearchAction: {
+                                  label: "Search",
+                                  onClick: () => commandPaletteStore.paletteOpen(),
+                              },
+                          }
+                        : {})}
+                    {...(spacesSidebar && stemCellsEnabled
+                        ? {
+                              sidebarCollapsedAction: {
+                                  label: "Create (⌘N or ⌘T)",
+                                  onClick: () => makeStuff(),
+                              },
+                              sidebarOwnsCreate: true,
+                          }
+                        : taskCreateTarget !== undefined
+                          ? {
+                                sidebarCollapsedAction: {
+                                    label: "New task (⌘N)",
+                                    onClick: () => props.onTaskCreateOpen?.(taskCreateTarget),
+                                },
+                            }
+                          : {})}
+                >
+                    {routeContent()}
+                </AppShell>
+            </OrkestChatFrame>
             {/* Command-K belongs to the window rather than to a workspace: it is
                 offered on every route, including the ones no machine is behind.
                 It only opens. The dispatcher stands down while any dialog is

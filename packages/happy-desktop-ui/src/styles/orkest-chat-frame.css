@@ -1,0 +1,105 @@
+.orkest-chat-frame {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    color: var(--text);
+    background: var(--groupped-background);
+}
+
+.orkest-chat-frame__header {
+    display: flex;
+    flex: 0 0 56px;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 0;
+    padding: 0 24px;
+    border-bottom: 1px solid color-mix(in srgb, var(--text) 16%, var(--groupped-background));
+    background: var(--surface);
+}
+
+.orkest-chat-frame__identity,
+.orkest-chat-frame__navigation {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.orkest-chat-frame__identity {
+    gap: 16px;
+}
+
+.orkest-chat-frame__brand,
+.orkest-chat-frame__title,
+.orkest-chat-frame__navigation {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.orkest-chat-frame__title {
+    margin: 0;
+}
+
+.orkest-chat-frame__divider {
+    align-self: stretch;
+    width: 1px;
+    min-height: 24px;
+    background: color-mix(in srgb, var(--text) 22%, var(--groupped-background));
+}
+
+.orkest-chat-frame__navigation {
+    align-self: stretch;
+    gap: 28px;
+}
+
+.orkest-chat-frame__navigation a,
+.orkest-chat-frame__navigation-current {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+    color: var(--text-secondary);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.orkest-chat-frame__navigation a:hover {
+    color: var(--text);
+}
+
+.orkest-chat-frame__navigation-current {
+    color: var(--text);
+}
+
+.orkest-chat-frame__navigation-current::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    border-radius: 999px 999px 0 0;
+    background: var(--text);
+    content: "";
+}
+
+.orkest-chat-frame__navigation a:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: 4px;
+}
+
+.orkest-chat-frame__content {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.orkest-chat-frame__content > * {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}

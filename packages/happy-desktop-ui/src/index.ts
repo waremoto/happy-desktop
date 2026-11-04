@@ -1167,3 +1167,10 @@ export {
     type ChatDefaultModelFigureProps,
     type ChatProviderCliFigureProps,
 } from "./ChatActionFigures";
+
+export {
+    OrkestChatFrame,
+    orkestChatReferenceEnabled,
+    orkestChatUrlParse,
+    type OrkestChatFrameProps,
+} from "./OrkestChatFrame";
