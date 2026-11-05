@@ -5317,7 +5317,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 focus, width, collapsed state, or scroll position. */}
             <OrkestChatFrame
                 {...(props.orkestBoardUrl === undefined ? {} : { boardUrl: props.orkestBoardUrl })}
-                {...(linkedWorkTask === undefined ? {} : { linkedWorkTaskId: linkedWorkTask.id })}
+                {...(linkedWorkTask === undefined
+                    ? {}
+                    : { linkedWorkTask: { id: linkedWorkTask.id, name: linkedWorkTask.name } })}
                 {...(props.orkestDossierUrl === undefined
                     ? {}
                     : { dossierUrl: props.orkestDossierUrl })}

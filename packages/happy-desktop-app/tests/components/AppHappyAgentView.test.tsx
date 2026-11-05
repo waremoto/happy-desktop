@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { expect, it } from "vitest";
 import type {
     HappyAgentClockStore,
@@ -254,6 +254,7 @@ it("leaves the sidebar head to the window band, with no local-only title", () =>
 it("links only the exact task for the routed conversation in the selected agent", () => {
     const task = {
         id: "task/7",
+        name: "<img src=x onerror=alert(1)>",
         workspaceId: "workspace-1",
         conversation: { id: "conversation-1" },
         subtasks: [],
@@ -269,6 +270,22 @@ it("links only the exact task for the routed conversation in the selected agent"
     const link = matching.container.querySelector('[data-testid="orkest-linked-work"]');
     expect(link?.textContent).toBe("Open linked work");
     expect(new URL(link?.getAttribute("href") ?? "").searchParams.get("taskId")).toBe("task/7");
+    const inspector = matching.container.querySelector(
+        '[data-testid="orkest-linked-work-inspector"]',
+    );
+    expect(inspector?.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect(inspector?.querySelector("img")).toBeNull();
+    expect(inspector?.textContent).toContain("Native task IDtask/7");
+    expect(inspector?.querySelector('a[href*="/x/orkest/work-context"]')?.textContent).toBe(
+        "Open in Orkest",
+    );
+    const toggle = matching.container.querySelector<HTMLButtonElement>(
+        ".orkest-chat-frame__work-toggle",
+    );
+    fireEvent.click(toggle as HTMLButtonElement);
+    expect(inspector?.hasAttribute("hidden")).toBe(true);
+    fireEvent.click(toggle as HTMLButtonElement);
+    expect(inspector?.hasAttribute("hidden")).toBe(false);
     matching.unmount();
 
     const noMatch = view({
@@ -291,6 +308,25 @@ it("links only the exact task for the routed conversation in the selected agent"
         tasks: [task],
     });
     expect(noTenant.container.querySelector('[data-testid="orkest-linked-work"]')).toBeNull();
+    expect(
+        noTenant.container.querySelector('[data-testid="orkest-linked-work-inspector"]'),
+    ).not.toBeNull();
+    expect(
+        noTenant.container.querySelector(
+            '[data-testid="orkest-linked-work-inspector"] a[href*="work-context"]',
+        ),
+    ).toBeNull();
+    const optOut = view({
+        groupId: "workspace-1",
+        chatId: "conversation-1",
+        platform: "desktop",
+        orkestChatReference: true,
+        orkestBoardUrl: "https://orkest.example/x/orkest/board?tenantId=tenant-1",
+        tasks: [task],
+    });
+    expect(
+        optOut.container.querySelector('[data-testid="orkest-linked-work-inspector"]'),
+    ).toBeNull();
 });
 
 it("highlights the addressed project and asks to navigate into it when it is picked", () => {

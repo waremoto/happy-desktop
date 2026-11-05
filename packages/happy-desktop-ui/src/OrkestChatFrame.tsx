@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import "./styles/orkest-chat-frame.css";
 
 export type OrkestChatFrameProps = {
@@ -6,8 +6,8 @@ export type OrkestChatFrameProps = {
     readonly enabled: boolean;
     /** The configured Board address. Missing or unsafe addresses are omitted. */
     readonly boardUrl?: string;
-    /** The current native Happy task's exact ID; never inferred from its transcript. */
-    readonly linkedWorkTaskId?: string;
+    /** The exact native Happy task for the currently routed conversation. */
+    readonly linkedWorkTask?: { readonly id: string; readonly name: string };
     /** The configured global Dossiers index address. It is not a work-item association. */
     readonly dossierUrl?: string;
     /** Truthful state while an explicit native task deep link is resolved. */
@@ -81,10 +81,11 @@ export function orkestWorkContextUrl(
 
 /** Orkest's optional renderer chrome; its child is the existing native Happy workspace. */
 export function OrkestChatFrame(props: OrkestChatFrameProps) {
+    const [inspectorOpen, setInspectorOpen] = useState(true);
     if (!props.enabled) return props.children;
     const boardUrl = orkestChatUrlParse(props.boardUrl);
     const dossierUrl = orkestChatUrlParse(props.dossierUrl);
-    const workContextUrl = orkestWorkContextUrl(props.boardUrl, props.linkedWorkTaskId);
+    const workContextUrl = orkestWorkContextUrl(props.boardUrl, props.linkedWorkTask?.id);
     const taskHandoffMessage =
         props.taskHandoffStatus === "loading"
             ? "Looking for that task in this Happy Agent…"
@@ -136,6 +137,17 @@ export function OrkestChatFrame(props: OrkestChatFrameProps) {
                                 Open linked work
                             </a>
                         ) : null}
+                        {props.linkedWorkTask ? (
+                            <button
+                                aria-expanded={inspectorOpen}
+                                aria-controls="orkest-linked-work-inspector"
+                                className="orkest-chat-frame__work-toggle"
+                                onClick={() => setInspectorOpen((open) => !open)}
+                                type="button"
+                            >
+                                Work
+                            </button>
+                        ) : null}
                     </nav>
                 </div>
             </header>
@@ -149,7 +161,49 @@ export function OrkestChatFrame(props: OrkestChatFrameProps) {
                     {taskHandoffMessage}
                 </p>
             ) : null}
-            <div className="orkest-chat-frame__content">{props.children}</div>
+            <div className="orkest-chat-frame__body">
+                <div className="orkest-chat-frame__content">{props.children}</div>
+                {props.linkedWorkTask ? (
+                    <aside
+                        aria-label="Linked work inspector"
+                        className="orkest-chat-frame__inspector"
+                        data-testid="orkest-linked-work-inspector"
+                        hidden={!inspectorOpen}
+                        id="orkest-linked-work-inspector"
+                    >
+                        <div className="orkest-chat-frame__inspector-heading">
+                            <h2>Linked work</h2>
+                            <button
+                                aria-label="Hide linked work inspector"
+                                aria-expanded="true"
+                                aria-controls="orkest-linked-work-inspector"
+                                className="orkest-chat-frame__inspector-close"
+                                onClick={() => setInspectorOpen(false)}
+                                type="button"
+                            >
+                                Hide
+                            </button>
+                        </div>
+                        <p className="orkest-chat-frame__inspector-name">
+                            {props.linkedWorkTask.name}
+                        </p>
+                        <dl className="orkest-chat-frame__inspector-identity">
+                            <dt>Native task ID</dt>
+                            <dd>{props.linkedWorkTask.id}</dd>
+                        </dl>
+                        {workContextUrl ? (
+                            <a
+                                className="orkest-chat-frame__inspector-link"
+                                href={workContextUrl}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                            >
+                                Open in Orkest
+                            </a>
+                        ) : null}
+                    </aside>
+                ) : null}
+            </div>
         </div>
     );
 }

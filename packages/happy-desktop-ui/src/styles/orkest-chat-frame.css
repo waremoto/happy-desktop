@@ -119,11 +119,125 @@
     outline-offset: 4px;
 }
 
+.orkest-chat-frame__work-toggle,
+.orkest-chat-frame__inspector-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.orkest-chat-frame__work-toggle {
+    position: relative;
+    height: 100%;
+    padding: 0 20px;
+    white-space: nowrap;
+}
+
+.orkest-chat-frame__work-toggle:hover,
+.orkest-chat-frame__inspector-close:hover {
+    color: var(--text);
+}
+
+.orkest-chat-frame__work-toggle:focus-visible,
+.orkest-chat-frame__inspector-close:focus-visible,
+.orkest-chat-frame__inspector-link:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: 3px;
+}
+
 .orkest-chat-frame__content {
     display: flex;
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
+}
+
+.orkest-chat-frame__body {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.orkest-chat-frame__inspector[hidden] {
+    display: none;
+}
+
+.orkest-chat-frame__inspector {
+    position: absolute;
+    z-index: 2;
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    width: min(304px, calc(100% - 32px));
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+    overflow: auto;
+    border: 1px solid color-mix(in srgb, var(--text) 14%, var(--groupped-background));
+    border-radius: 12px;
+    color: var(--text);
+    background: var(--surface);
+    box-shadow: 0 12px 36px color-mix(in srgb, #000 22%, transparent);
+}
+
+.orkest-chat-frame__inspector-heading {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.orkest-chat-frame__inspector-heading h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.orkest-chat-frame__inspector-close {
+    min-height: 32px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.orkest-chat-frame__inspector-name {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 18px;
+    font-weight: 650;
+    line-height: 1.35;
+}
+
+.orkest-chat-frame__inspector-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.orkest-chat-frame__inspector-identity dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-family: var(--font-mono, monospace);
+}
+
+.orkest-chat-frame__inspector-link {
+    align-self: flex-start;
+    color: var(--text-link);
+    font-size: 13px;
+    font-weight: 650;
 }
 
 .orkest-chat-frame__handoff {
@@ -167,5 +281,16 @@
         grid-row: 2;
         justify-self: center;
         min-height: 40px;
+    }
+
+    .orkest-chat-frame__navigation a,
+    .orkest-chat-frame__work-toggle {
+        padding-right: 12px;
+        padding-left: 12px;
+    }
+
+    .orkest-chat-frame__inspector {
+        width: min(240px, calc(100% - 32px));
+        padding: 16px;
     }
 }

@@ -83,7 +83,11 @@ it("opens linked work only from a tenant-bound canonical Board address", async (
     const boardUrl = "https://orkest.example/x/orkest/board?tenantId=tenant%2Fone&discard=1";
     const view = createRenderer().render(
         () => (
-            <OrkestChatFrame boardUrl={boardUrl} enabled linkedWorkTaskId="task 7">
+            <OrkestChatFrame
+                boardUrl={boardUrl}
+                enabled
+                linkedWorkTask={{ id: "task 7", name: "Task name" }}
+            >
                 <div>Conversation body</div>
             </OrkestChatFrame>
         ),
@@ -106,6 +110,56 @@ it("opens linked work only from a tenant-bound canonical Board address", async (
     expect(
         orkestWorkContextUrl("https://orkest.example/elsewhere?tenantId=a", "task"),
     ).toBeUndefined();
+});
+
+it("keeps the native body width while the inspector overlays its right side", async () => {
+    function Harness() {
+        const [task, setTask] = useState({ id: "task-1", name: "Selected task" });
+        return (
+            <>
+                <button
+                    data-testid="select-next-task"
+                    onClick={() => setTask({ id: "task-2", name: "Next selected task" })}
+                >
+                    Select next task
+                </button>
+                <OrkestChatFrame
+                    boardUrl="https://orkest.example/x/orkest/board?tenantId=tenant-1"
+                    enabled
+                    linkedWorkTask={task}
+                >
+                    <div data-testid="native-workspace">Native workspace</div>
+                </OrkestChatFrame>
+            </>
+        );
+    }
+
+    for (const width of [920, 720]) {
+        const view = createRenderer().render(() => <Harness />, {
+            width,
+            height: 720,
+            padding: 0,
+        });
+        await view.ready();
+        const body = view.container.querySelector(".orkest-chat-frame__body");
+        const workspace = view.$('[data-testid="native-workspace"]').element;
+        const inspector = view.$('[data-testid="orkest-linked-work-inspector"]').element;
+        expect(getComputedStyle(inspector).position).toBe("absolute");
+        expect(body?.getBoundingClientRect().width).toBe(workspace.getBoundingClientRect().width);
+        expect(Number.parseFloat(getComputedStyle(inspector).width)).toBeLessThanOrEqual(
+            width === 720 ? 240 : 304,
+        );
+        expect(view.$('[aria-label="Open linked work"]').element.getAttribute("href")).toContain(
+            "/x/orkest/work-context?taskId=task-1&tenantId=tenant-1",
+        );
+        await userEvent.click(view.$('[data-testid="select-next-task"]').element);
+        expect(
+            view.$('[data-testid="orkest-linked-work-inspector"]').element.textContent,
+        ).toContain("Next selected task");
+        expect(view.$('[aria-label="Open linked work"]').element.getAttribute("href")).toContain(
+            "taskId=task-2",
+        );
+    }
 });
 
 it("states when an explicit task handoff cannot be resolved yet", async () => {
