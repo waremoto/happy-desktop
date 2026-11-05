@@ -158,6 +158,7 @@
 }
 
 .orkest-chat-frame__body {
+    container: orkest-workbench / inline-size;
     position: relative;
     display: flex;
     flex: 1 1 auto;
@@ -256,6 +257,14 @@
     min-height: 0;
 }
 
+@container orkest-workbench (min-width: 1180px) {
+    .orkest-chat-frame__inspector {
+        position: static;
+        flex: 0 0 304px;
+        margin: 12px;
+    }
+}
+
 /* The minimum supported desktop window has room for two orderly title rows. */
 @media (min-width: 720px) and (max-width: 800px) {
     .orkest-chat-frame__product-row {
@@ -288,7 +297,9 @@
         padding-right: 12px;
         padding-left: 12px;
     }
+}
 
+@container orkest-workbench (max-width: 800px) {
     .orkest-chat-frame__inspector {
         width: min(240px, calc(100% - 32px));
         padding: 16px;

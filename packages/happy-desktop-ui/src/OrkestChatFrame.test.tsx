@@ -112,7 +112,7 @@ it("opens linked work only from a tenant-bound canonical Board address", async (
     ).toBeUndefined();
 });
 
-it("keeps the native body width while the inspector overlays its right side", async () => {
+it("docks the inspector on wide workbenches and overlays it on compact ones", async () => {
     function Harness() {
         const [task, setTask] = useState({ id: "task-1", name: "Selected task" });
         return (
@@ -134,7 +134,7 @@ it("keeps the native body width while the inspector overlays its right side", as
         );
     }
 
-    for (const width of [920, 720]) {
+    for (const width of [1280, 920, 720]) {
         const view = createRenderer().render(() => <Harness />, {
             width,
             height: 720,
@@ -144,8 +144,17 @@ it("keeps the native body width while the inspector overlays its right side", as
         const body = view.container.querySelector(".orkest-chat-frame__body");
         const workspace = view.$('[data-testid="native-workspace"]').element;
         const inspector = view.$('[data-testid="orkest-linked-work-inspector"]').element;
-        expect(getComputedStyle(inspector).position).toBe("absolute");
-        expect(body?.getBoundingClientRect().width).toBe(workspace.getBoundingClientRect().width);
+        if (width === 1280) {
+            expect(getComputedStyle(inspector).position).toBe("static");
+            expect(workspace.getBoundingClientRect().right).toBeLessThanOrEqual(
+                inspector.getBoundingClientRect().left,
+            );
+        } else {
+            expect(getComputedStyle(inspector).position).toBe("absolute");
+            expect(body?.getBoundingClientRect().width).toBe(
+                workspace.getBoundingClientRect().width,
+            );
+        }
         expect(Number.parseFloat(getComputedStyle(inspector).width)).toBeLessThanOrEqual(
             width === 720 ? 240 : 304,
         );
