@@ -48,13 +48,35 @@ it("shows only explicit validated Board and Dossier links", async () => {
         "Board",
     );
     expect(view.$('a[href="https://orkest.example/dossiers/actual"]').element.textContent).toBe(
-        "Dossier",
+        "Dossiers",
     );
+    expect(
+        view
+            .$('a[href="https://orkest.example/dossiers/actual"]')
+            .element.getAttribute("aria-label"),
+    ).toBe("Dossiers index");
     expect(
         view.$('a[href="https://orkest.example/dossiers/actual"]').element.getAttribute("rel"),
     ).toBe("noopener noreferrer");
     expect(orkestChatUrlParse("data:text/html,hi")).toBeUndefined();
     expect(orkestChatUrlParse("https://orkest.example/path")).toBe("https://orkest.example/path");
+});
+
+it("states when an explicit task handoff cannot be resolved yet", async () => {
+    const view = createRenderer().render(
+        () => (
+            <OrkestChatFrame enabled taskHandoffStatus="disconnected">
+                <div data-testid="native-chat">Native conversation</div>
+            </OrkestChatFrame>
+        ),
+        { width: 920, height: 640, padding: 0 },
+    );
+    await view.ready();
+
+    expect(view.$('[data-testid="orkest-task-handoff"]').element.textContent).toContain(
+        "Happy Agent is disconnected",
+    );
+    expect(view.$('[data-testid="native-chat"]').element.textContent).toBe("Native conversation");
 });
 
 it("returns the original workspace child when the opt-in is disabled", async () => {

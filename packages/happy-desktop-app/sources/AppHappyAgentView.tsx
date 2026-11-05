@@ -1,4 +1,11 @@
-import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
+import {
+    useCallback,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useSyncExternalStore,
+    type ReactNode,
+} from "react";
 import type { HappyAgentSystemMonitorStore } from "happy-desktop-state";
 import {
     HappyAgentSystemMonitorSurfacePage,
@@ -129,6 +136,7 @@ import type {
     HappyAgentServiceTier,
     HappyAgentSessionCreateInput,
     HappyAgentSessionId,
+    HappyAgentSessionListSnapshot,
     HappyAgentSessionSummary,
     ScrollbarVisibility,
     ThemeMode,
@@ -423,12 +431,15 @@ import type {
     AppHappyAgentUpdateStore,
 } from "./agentUpdate";
 import { agentUpdateCardView, type AgentUpdateCatalog } from "./agentUpdateCardView";
+import { orkestTaskHandoffResolve } from "./navigation/orkestTaskHandoff";
 
 /** The people store of a connection that keeps no artifacts: nobody is named. */
 const PEOPLE_NONE: ReadonlyMap<string, string> = new Map();
 const peopleNoop = () => PEOPLE_NONE;
 const peopleSubscribeNoop = () => () => undefined;
 const storiesFeedNone = () => undefined;
+const orkestTaskWorkspaceSubscribeNone = (_listener: () => void) => () => undefined;
+const orkestTaskListGetNone = (): HappyAgentSessionListSnapshot | undefined => undefined;
 
 const sidebarDaemonUnavailable: AppHappyAgentDaemonSnapshot = {
     install: { phase: "idle" },
@@ -780,8 +791,12 @@ export interface AppHappyAgentViewProps {
     orkestChatReference?: boolean;
     /** Explicit configured Orkest Board address. */
     orkestBoardUrl?: string;
-    /** Explicit configured Dossier address for the addressed work item. */
+    /** Explicit configured global Dossiers index address; not tied to this conversation. */
     orkestDossierUrl?: string;
+    /** The explicit Orkest attended-task ID from the web renderer query. */
+    orkestTaskId?: string;
+    /** Opens an already listed task using Happy's native session address. */
+    onOrkestTaskOpen?(happyAgentId: string, location: HappyAgentSessionLocation): void;
     /**
      * The window's own chrome. Entering macOS full screen takes the traffic
      * lights away, so the lane reserved for them closes with them and the sidebar
@@ -3497,6 +3512,43 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         directory.happyAgents.find((happyAgent) => happyAgent.id === props.happyAgentId) ??
         directory.happyAgents[0] ??
         undefined;
+    // A task handoff is resolved only against the Happy Agent named by the URL;
+    // the ordinary view's fallback machine must never turn a miss into a guess.
+    const selectedHappyAgent = directory.happyAgents.find(
+        (happyAgent) => happyAgent.id === props.happyAgentId,
+    );
+    const taskWorkspace = selectedHappyAgent?.session?.workspace;
+    // The workspace publishes frequent transcript updates. Select its stable list
+    // member so task handoffs render only when the task catalog itself changes.
+    const taskList = useSyncExternalStore(
+        taskWorkspace?.subscribe ?? orkestTaskWorkspaceSubscribeNone,
+        () => taskWorkspace?.get().list,
+        orkestTaskListGetNone,
+    );
+    const taskHandoff = orkestTaskHandoffResolve(
+        props.orkestTaskId,
+        selectedHappyAgent?.status,
+        taskList,
+    );
+    const taskHandoffLocation = taskHandoff.status === "found" ? taskHandoff.location : undefined;
+    const taskHandoffOpened = useRef<string | undefined>(undefined);
+    useLayoutEffect(() => {
+        if (taskHandoff.status !== "found") {
+            taskHandoffOpened.current = undefined;
+            return;
+        }
+        const identity = `${props.happyAgentId}\u0000${taskHandoff.taskId}`;
+        if (taskHandoffOpened.current === identity) return;
+        taskHandoffOpened.current = identity;
+        props.onOrkestTaskOpen?.(props.happyAgentId, taskHandoff.location);
+    }, [
+        props.happyAgentId,
+        props.onOrkestTaskOpen,
+        taskHandoff.status,
+        taskHandoff.status === "found" ? taskHandoff.taskId : undefined,
+        taskHandoffLocation?.groupId,
+        taskHandoffLocation?.sessionId,
+    ]);
     const viewerId = happyAgentOwnerAuthor.id;
     const stemCellsSettingsStore =
         active?.session?.stemCellsSettings?.() ?? happyAgentStemCellsSettingsStoreNoop;
@@ -5250,11 +5302,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 {...(props.orkestDossierUrl === undefined
                     ? {}
                     : { dossierUrl: props.orkestDossierUrl })}
-                enabled={
-                    props.orkestChatReference === true &&
-                    props.platform === "web" &&
-                    props.groupId !== undefined
-                }
+                {...(taskHandoff.status === "none" || taskHandoff.status === "found"
+                    ? {}
+                    : { taskHandoffStatus: taskHandoff.status })}
+                enabled={props.orkestChatReference === true && props.platform === "web"}
             >
                 <AppShell
                     sidebarCollapsible

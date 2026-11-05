@@ -6,8 +6,10 @@ export type OrkestChatFrameProps = {
     readonly enabled: boolean;
     /** The configured Board address. Missing or unsafe addresses are omitted. */
     readonly boardUrl?: string;
-    /** The configured Dossier address for this real conversation, when known. */
+    /** The configured global Dossiers index address. It is not a work-item association. */
     readonly dossierUrl?: string;
+    /** Truthful state while an explicit native task deep link is resolved. */
+    readonly taskHandoffStatus?: "loading" | "disconnected" | "unavailable" | "notFound";
     readonly children: ReactNode;
 };
 
@@ -43,6 +45,16 @@ export function OrkestChatFrame(props: OrkestChatFrameProps) {
     if (!props.enabled) return props.children;
     const boardUrl = orkestChatUrlParse(props.boardUrl);
     const dossierUrl = orkestChatUrlParse(props.dossierUrl);
+    const taskHandoffMessage =
+        props.taskHandoffStatus === "loading"
+            ? "Looking for that task in this Happy Agent…"
+            : props.taskHandoffStatus === "disconnected"
+              ? "This Happy Agent is disconnected. Reconnect it to open the requested task."
+              : props.taskHandoffStatus === "unavailable"
+                ? "The selected Happy Agent or its task list is unavailable."
+                : props.taskHandoffStatus === "notFound"
+                  ? "That task is not in this Happy Agent’s task list."
+                  : undefined;
     return (
         <div className="orkest-chat-frame" data-orkest-chat-frame="true">
             <header className="orkest-chat-frame__header">
@@ -61,12 +73,27 @@ export function OrkestChatFrame(props: OrkestChatFrameProps) {
                         </a>
                     ) : null}
                     {dossierUrl ? (
-                        <a href={dossierUrl} rel="noopener noreferrer" target="_blank">
-                            Dossier
+                        <a
+                            aria-label="Dossiers index"
+                            href={dossierUrl}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                        >
+                            Dossiers
                         </a>
                     ) : null}
                 </nav>
             </header>
+            {taskHandoffMessage ? (
+                <p
+                    aria-live="polite"
+                    className="orkest-chat-frame__handoff"
+                    data-testid="orkest-task-handoff"
+                    role={props.taskHandoffStatus === "notFound" ? "alert" : "status"}
+                >
+                    {taskHandoffMessage}
+                </p>
+            ) : null}
             <div className="orkest-chat-frame__content">{props.children}</div>
         </div>
     );
