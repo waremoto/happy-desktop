@@ -58,31 +58,35 @@ export function OrkestChatFrame(props: OrkestChatFrameProps) {
     return (
         <div className="orkest-chat-frame" data-orkest-chat-frame="true">
             <header className="orkest-chat-frame__header">
-                <div className="orkest-chat-frame__identity">
+                <div className="orkest-chat-frame__brand-row">
                     <span className="orkest-chat-frame__brand">Orkest</span>
-                    <span className="orkest-chat-frame__divider" aria-hidden="true" />
-                    <h1 className="orkest-chat-frame__title">Chat</h1>
                 </div>
-                <nav aria-label="Orkest navigation" className="orkest-chat-frame__navigation">
-                    <span aria-current="page" className="orkest-chat-frame__navigation-current">
-                        Chat
-                    </span>
-                    {boardUrl ? (
-                        <a href={boardUrl} rel="noopener noreferrer" target="_blank">
-                            Board
-                        </a>
-                    ) : null}
-                    {dossierUrl ? (
-                        <a
-                            aria-label="Dossiers index"
-                            href={dossierUrl}
-                            rel="noopener noreferrer"
-                            target="_blank"
-                        >
-                            Dossiers
-                        </a>
-                    ) : null}
-                </nav>
+                <div className="orkest-chat-frame__product-row">
+                    <div className="orkest-chat-frame__product">
+                        <h1 className="orkest-chat-frame__title">Orkest Platform</h1>
+                        <p className="orkest-chat-frame__subtitle">People and agents, one team</p>
+                    </div>
+                    <nav aria-label="Orkest navigation" className="orkest-chat-frame__navigation">
+                        <span aria-current="page" className="orkest-chat-frame__navigation-current">
+                            Chat
+                        </span>
+                        {boardUrl ? (
+                            <a href={boardUrl} rel="noopener noreferrer" target="_blank">
+                                Board
+                            </a>
+                        ) : null}
+                        {dossierUrl ? (
+                            <a
+                                aria-label="Dossiers index"
+                                href={dossierUrl}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                            >
+                                Dossiers
+                            </a>
+                        ) : null}
+                    </nav>
+                </div>
             </header>
             {taskHandoffMessage ? (
                 <p

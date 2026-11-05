@@ -12,48 +12,75 @@
 
 .orkest-chat-frame__header {
     display: flex;
-    flex: 0 0 56px;
-    align-items: center;
-    justify-content: space-between;
+    flex: 0 0 auto;
+    flex-direction: column;
     min-width: 0;
-    padding: 0 24px;
     border-bottom: 1px solid color-mix(in srgb, var(--text) 16%, var(--groupped-background));
     background: var(--surface);
 }
 
-.orkest-chat-frame__identity,
+.orkest-chat-frame__brand-row,
+.orkest-chat-frame__product-row,
+.orkest-chat-frame__product,
 .orkest-chat-frame__navigation {
     display: flex;
-    align-items: center;
     min-width: 0;
 }
 
-.orkest-chat-frame__identity {
-    gap: 16px;
+.orkest-chat-frame__brand-row {
+    flex: 0 0 48px;
+    align-items: center;
+    padding: 0 24px;
+    border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, var(--groupped-background));
 }
 
-.orkest-chat-frame__brand,
-.orkest-chat-frame__title,
-.orkest-chat-frame__navigation {
+.orkest-chat-frame__brand {
     font-size: 16px;
     font-weight: 700;
     letter-spacing: -0.02em;
 }
 
-.orkest-chat-frame__title {
-    margin: 0;
+.orkest-chat-frame__product-row {
+    display: grid;
+    flex: 0 0 72px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    min-height: 72px;
+    padding: 0 24px;
 }
 
-.orkest-chat-frame__divider {
-    align-self: stretch;
-    width: 1px;
-    min-height: 24px;
-    background: color-mix(in srgb, var(--text) 22%, var(--groupped-background));
+.orkest-chat-frame__product {
+    grid-column: 1;
+    grid-row: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+}
+
+.orkest-chat-frame__title {
+    margin: 0;
+    font-size: 23px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+}
+
+.orkest-chat-frame__subtitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.25;
 }
 
 .orkest-chat-frame__navigation {
+    grid-column: 2;
+    grid-row: 1;
     align-self: stretch;
-    gap: 28px;
+    align-items: stretch;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
 .orkest-chat-frame__navigation a,
@@ -62,6 +89,7 @@
     display: inline-flex;
     align-items: center;
     height: 100%;
+    padding: 0 20px;
     color: var(--text-secondary);
     text-decoration: none;
     white-space: nowrap;
@@ -112,4 +140,32 @@
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
+}
+
+/* The minimum supported desktop window has room for two orderly title rows. */
+@media (min-width: 720px) and (max-width: 800px) {
+    .orkest-chat-frame__product-row {
+        flex-basis: auto;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 4px;
+        min-height: 0;
+        padding: 8px 16px 0;
+    }
+
+    .orkest-chat-frame__product {
+        grid-column: 1;
+        grid-row: 1;
+        min-height: 40px;
+    }
+
+    .orkest-chat-frame__title {
+        font-size: 21px;
+    }
+
+    .orkest-chat-frame__navigation {
+        grid-column: 1;
+        grid-row: 2;
+        justify-self: center;
+        min-height: 40px;
+    }
 }

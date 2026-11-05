@@ -43,6 +43,18 @@ it("shows only explicit validated Board and Dossier links", async () => {
     );
     await view.ready();
 
+    expect(view.$(".orkest-chat-frame__brand-row").element.textContent).toBe("Orkest");
+    expect(view.$(".orkest-chat-frame__product-row").element.textContent).toContain(
+        "Orkest Platform",
+    );
+    expect(view.$(".orkest-chat-frame__subtitle").element.textContent).toBe(
+        "People and agents, one team",
+    );
+    expect(
+        view
+            .$(".orkest-chat-frame__product-row")
+            .element.querySelector('[aria-label="Orkest navigation"]'),
+    ).not.toBeNull();
     expect(view.$('[aria-label="Orkest navigation"]').element.querySelectorAll("a").length).toBe(2);
     expect(view.$('a[href="http://localhost:3002/x/orkest/board"]').element.textContent).toBe(
         "Board",
