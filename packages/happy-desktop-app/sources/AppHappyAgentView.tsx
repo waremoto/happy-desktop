@@ -431,7 +431,7 @@ import type {
     AppHappyAgentUpdateStore,
 } from "./agentUpdate";
 import { agentUpdateCardView, type AgentUpdateCatalog } from "./agentUpdateCardView";
-import { orkestTaskHandoffResolve } from "./navigation/orkestTaskHandoff";
+import { orkestTaskHandoffResolve, orkestTaskIdParse } from "./navigation/orkestTaskHandoff";
 
 /** The people store of a connection that keeps no artifacts: nobody is named. */
 const PEOPLE_NONE: ReadonlyMap<string, string> = new Map();
@@ -795,6 +795,8 @@ export interface AppHappyAgentViewProps {
     orkestDossierUrl?: string;
     /** The explicit Orkest attended-task ID from the web renderer query. */
     orkestTaskId?: string;
+    /** Browser-local boot handoff, retained separately so it is consumed only once. */
+    orkestInitialTaskId?: string;
     /** Opens an already listed task using Happy's native session address. */
     onOrkestTaskOpen?(happyAgentId: string, location: HappyAgentSessionLocation): void;
     /**
@@ -3525,24 +3527,35 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         () => taskWorkspace?.get().list,
         orkestTaskListGetNone,
     );
+    const initialTaskId = orkestTaskIdParse(props.orkestInitialTaskId);
     const taskHandoff = orkestTaskHandoffResolve(
-        props.orkestTaskId,
+        orkestTaskIdParse(props.orkestTaskId) ?? initialTaskId,
         selectedHappyAgent?.status,
         taskList,
     );
     const taskHandoffLocation = taskHandoff.status === "found" ? taskHandoff.location : undefined;
     const taskHandoffOpened = useRef<string | undefined>(undefined);
+    const initialTaskHandoffConsumed = useRef(false);
     useLayoutEffect(() => {
         if (taskHandoff.status !== "found") {
-            taskHandoffOpened.current = undefined;
+            if (initialTaskId === undefined || initialTaskHandoffConsumed.current)
+                taskHandoffOpened.current = undefined;
             return;
         }
         const identity = `${props.happyAgentId}\u0000${taskHandoff.taskId}`;
+        if (initialTaskId === taskHandoff.taskId) {
+            if (initialTaskHandoffConsumed.current) return;
+            initialTaskHandoffConsumed.current = true;
+            taskHandoffOpened.current = identity;
+            props.onOrkestTaskOpen?.(props.happyAgentId, taskHandoff.location);
+            return;
+        }
         if (taskHandoffOpened.current === identity) return;
         taskHandoffOpened.current = identity;
         props.onOrkestTaskOpen?.(props.happyAgentId, taskHandoff.location);
     }, [
         props.happyAgentId,
+        initialTaskId,
         props.onOrkestTaskOpen,
         taskHandoff.status,
         taskHandoff.status === "found" ? taskHandoff.taskId : undefined,

@@ -27,6 +27,9 @@ describe("Orkest native task handoff", () => {
         expect(orkestTaskHandoffSearch(" ")).toEqual({});
         expect(orkestTaskHandoffSearch(["orkest-task-1"])).toEqual({});
         expect(orkestTaskIdParse(" orkest-task-1")).toBeUndefined();
+        expect(orkestTaskIdParse("orkest-task-1\u0000")).toBeUndefined();
+        expect(orkestTaskIdParse("orkest-task-1\u0085")).toBeUndefined();
+        expect(orkestTaskIdParse("x".repeat(257))).toBeUndefined();
         expect(orkestTaskIdParse(undefined)).toBeUndefined();
     });
 
