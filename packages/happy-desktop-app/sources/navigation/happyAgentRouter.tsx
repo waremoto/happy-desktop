@@ -8,6 +8,7 @@ import {
     useNavigate,
     useParams,
     useRouteContext,
+    useSearch,
     useRouter,
     type AnyRouteMatch,
     type ParsedLocation,
@@ -75,6 +76,7 @@ import {
     type AppHappyAgentProfilerStore,
 } from "../views/AppHappyAgentSettingsView";
 import type { AppHappyAgentReleaseNotesStore, AppHappyAgentUpdateStore } from "../agentUpdate";
+import { orkestTaskHandoffSearch, orkestTaskIdParse } from "./orkestTaskHandoff";
 
 /**
  * Everything the local route tree needs that the URL does not address: the
@@ -89,7 +91,7 @@ export interface HappyAgentRouterContext {
     readonly orkestChatReference?: boolean;
     /** Explicit configured Board link, omitted when absent or invalid. */
     readonly orkestBoardUrl?: string;
-    /** Explicit work-item Dossier link, omitted when absent or invalid. */
+    /** Explicit global Dossiers index link, omitted when absent or invalid. */
     readonly orkestDossierUrl?: string;
     /** Whether this desktop fills logins saved in the person's browsers, whatever agent is connected. */
     readonly browserPasswordsAvailable?: boolean;
@@ -258,8 +260,13 @@ function happyAgentDefaultId(context: HappyAgentRouterContext | undefined): stri
  * Redirects to one machine's list. The router helper's generic path type does not
  * retain this locally assembled tree, so `happyAgentRouterCreate` checks the path here.
  */
-function happyAgentListRedirect(happyAgentId: string): never {
-    throw redirect({ params: { happyAgentId }, replace: true, to: "/chats/$happyAgentId" });
+function happyAgentListRedirect(happyAgentId: string, taskId?: string): never {
+    throw redirect({
+        params: { happyAgentId },
+        replace: true,
+        search: orkestTaskHandoffSearch(taskId),
+        to: "/chats/$happyAgentId",
+    });
 }
 
 /** The addressed Happy Agent's workspace store, absent while that Happy Agent is not connected. */
@@ -286,13 +293,25 @@ function happyAgentSurfaces(
 const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
-    beforeLoad: ({ context }) => happyAgentListRedirect(happyAgentDefaultId(context)),
+    beforeLoad: ({ context, search }) =>
+        happyAgentListRedirect(
+            happyAgentDefaultId(context),
+            orkestChatReferenceEnabled(context.orkestChatReference, context.platform)
+                ? orkestTaskIdParse((search as { readonly taskId?: unknown }).taskId)
+                : undefined,
+        ),
 });
 
 const chatsRootRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/chats",
-    beforeLoad: ({ context }) => happyAgentListRedirect(happyAgentDefaultId(context)),
+    beforeLoad: ({ context, search }) =>
+        happyAgentListRedirect(
+            happyAgentDefaultId(context),
+            orkestChatReferenceEnabled(context.orkestChatReference, context.platform)
+                ? orkestTaskIdParse((search as { readonly taskId?: unknown }).taskId)
+                : undefined,
+        ),
 });
 
 /**
@@ -579,6 +598,13 @@ function HappyAgentWorkspaceLayout() {
     // `strict: false` because a Happy Agent's list carries only `happyAgentId`, and a group
     // carries no `chatId`.
     const params = useParams({ strict: false });
+    const search = useSearch({ strict: false }) as { readonly taskId?: unknown };
+    const requestedOrkestTaskId = orkestChatReferenceEnabled(
+        context.orkestChatReference,
+        context.platform,
+    )
+        ? orkestTaskIdParse(search.taskId)
+        : undefined;
     // What the content region shows, by the routes matched under this one
     // layout: the window around it stays the same instance at every address.
     const matched = new Set<string>(useMatches().map((match) => match.routeId));
@@ -607,6 +633,12 @@ function HappyAgentWorkspaceLayout() {
             {...(context.orkestDossierUrl === undefined
                 ? {}
                 : { orkestDossierUrl: context.orkestDossierUrl })}
+            {...(requestedOrkestTaskId === undefined
+                ? {}
+                : { orkestTaskId: requestedOrkestTaskId })}
+            onOrkestTaskOpen={(happyAgentId, location) =>
+                happyAgentRouterConversationOpen(router, happyAgentId, location)
+            }
             browserContent={context.browserContent}
             buildIdentity={context.buildIdentity}
             performance={context.performance}
