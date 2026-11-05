@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HappyAgentSessionListSnapshot, HappyAgentTask } from "happy-desktop-state";
 import {
+    orkestTaskForConversation,
     orkestTaskHandoffResolve,
     orkestTaskHandoffRequestedId,
     orkestTaskHandoffSearch,
@@ -62,6 +63,31 @@ describe("Orkest native task handoff", () => {
             status: "found",
             location: { groupId: "workspace-1", sessionId: "conversation-1" },
         });
+    });
+
+    it("matches the routed workspace and conversation across all catalogs, deduping IDs", () => {
+        const catalog = {
+            ...readyCatalog([task]),
+            taskDirectory: [task],
+            tasksArchived: [task],
+        } as HappyAgentSessionListSnapshot;
+        expect(orkestTaskForConversation(catalog, "workspace-1", "conversation-1")).toBe(task);
+        expect(orkestTaskForConversation(catalog, undefined, "conversation-1")).toBeUndefined();
+        expect(
+            orkestTaskForConversation(catalog, "other-workspace", "conversation-1"),
+        ).toBeUndefined();
+        expect(
+            orkestTaskForConversation(catalog, "workspace-1", "other-conversation"),
+        ).toBeUndefined();
+    });
+
+    it("refuses multiple distinct tasks for the same routed conversation", () => {
+        const other = { ...task, id: "orkest-task-2" } as HappyAgentTask;
+        const catalog = {
+            ...readyCatalog([task]),
+            taskDirectory: [other],
+        } as HappyAgentSessionListSnapshot;
+        expect(orkestTaskForConversation(catalog, "workspace-1", "conversation-1")).toBeUndefined();
     });
 
     it("reports loading, disconnection, catalog failure, and a genuine miss distinctly", () => {

@@ -431,7 +431,11 @@ import type {
     AppHappyAgentUpdateStore,
 } from "./agentUpdate";
 import { agentUpdateCardView, type AgentUpdateCatalog } from "./agentUpdateCardView";
-import { orkestTaskHandoffResolve, orkestTaskIdParse } from "./navigation/orkestTaskHandoff";
+import {
+    orkestTaskForConversation,
+    orkestTaskHandoffResolve,
+    orkestTaskIdParse,
+} from "./navigation/orkestTaskHandoff";
 import type { OrkestTaskInitialHandoff } from "./navigation/orkestTaskHandoff";
 
 /** The people store of a connection that keeps no artifacts: nobody is named. */
@@ -3528,6 +3532,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         () => taskWorkspace?.get().list,
         orkestTaskListGetNone,
     );
+    const linkedWorkTask = orkestTaskForConversation(taskList, props.groupId, props.chatId);
     const initialTaskHandoff = props.orkestInitialTaskHandoff;
     const initialTaskId = orkestTaskIdParse(initialTaskHandoff?.pendingTaskId);
     const taskHandoff = orkestTaskHandoffResolve(
@@ -5312,6 +5317,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 focus, width, collapsed state, or scroll position. */}
             <OrkestChatFrame
                 {...(props.orkestBoardUrl === undefined ? {} : { boardUrl: props.orkestBoardUrl })}
+                {...(linkedWorkTask === undefined ? {} : { linkedWorkTaskId: linkedWorkTask.id })}
                 {...(props.orkestDossierUrl === undefined
                     ? {}
                     : { dossierUrl: props.orkestDossierUrl })}

@@ -132,6 +132,7 @@ function workspace(tasks: readonly HappyAgentTask[] = []): HappyAgentWorkspaceSt
         subscribe: () => () => undefined,
         conversationOpen: () => undefined,
         conversationClose: () => undefined,
+        conversationViewSizeUpdate: () => undefined,
         conversationListRetry: () => undefined,
         conversationRetry: () => undefined,
         [Symbol.dispose]: () => undefined,
@@ -193,6 +194,7 @@ function view(
         happyAgentId?: string;
         platform?: "desktop" | "web";
         orkestChatReference?: boolean;
+        orkestBoardUrl?: string;
         orkestInitialTaskHandoff?: OrkestTaskInitialHandoff;
         tasks?: readonly HappyAgentTask[];
         onOrkestTaskOpen?: (
@@ -218,6 +220,7 @@ function view(
         groupId: options.groupId,
         platform: options.platform,
         orkestChatReference: options.orkestChatReference,
+        orkestBoardUrl: options.orkestBoardUrl,
         orkestInitialTaskHandoff: options.orkestInitialTaskHandoff,
         onOrkestTaskOpen: options.onOrkestTaskOpen,
         onChatSelect: options.onChatSelect ?? (() => undefined),
@@ -246,6 +249,48 @@ it("leaves the sidebar head to the window band, with no local-only title", () =>
     // The plain title row and its chevron affordance are gone.
     expect(container.textContent).not.toContain("Local");
     expect(container.querySelector(".happy-sidebar__title-chevron")).toBeNull();
+});
+
+it("links only the exact task for the routed conversation in the selected agent", () => {
+    const task = {
+        id: "task/7",
+        workspaceId: "workspace-1",
+        conversation: { id: "conversation-1" },
+        subtasks: [],
+    } as unknown as HappyAgentTask;
+    const matching = view({
+        groupId: "workspace-1",
+        chatId: "conversation-1",
+        platform: "web",
+        orkestChatReference: true,
+        orkestBoardUrl: "https://orkest.example/x/orkest/board?tenantId=tenant-1",
+        tasks: [task],
+    });
+    const link = matching.container.querySelector('[data-testid="orkest-linked-work"]');
+    expect(link?.textContent).toBe("Open linked work");
+    expect(new URL(link?.getAttribute("href") ?? "").searchParams.get("taskId")).toBe("task/7");
+    matching.unmount();
+
+    const noMatch = view({
+        groupId: "workspace-1",
+        chatId: "other-conversation",
+        platform: "web",
+        orkestChatReference: true,
+        orkestBoardUrl: "https://orkest.example/x/orkest/board?tenantId=tenant-1",
+        tasks: [task],
+    });
+    expect(noMatch.container.querySelector('[data-testid="orkest-linked-work"]')).toBeNull();
+    noMatch.unmount();
+
+    const noTenant = view({
+        groupId: "workspace-1",
+        chatId: "conversation-1",
+        platform: "web",
+        orkestChatReference: true,
+        orkestBoardUrl: "https://orkest.example/x/orkest/board",
+        tasks: [task],
+    });
+    expect(noTenant.container.querySelector('[data-testid="orkest-linked-work"]')).toBeNull();
 });
 
 it("highlights the addressed project and asks to navigate into it when it is picked", () => {

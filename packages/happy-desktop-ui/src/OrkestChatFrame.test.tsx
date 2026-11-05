@@ -2,7 +2,12 @@ import { expect, it } from "vitest";
 import { useState } from "react";
 import { userEvent } from "vitest/browser";
 import "./theme.css";
-import { OrkestChatFrame, orkestChatReferenceEnabled, orkestChatUrlParse } from "./OrkestChatFrame";
+import {
+    OrkestChatFrame,
+    orkestChatReferenceEnabled,
+    orkestChatUrlParse,
+    orkestWorkContextUrl,
+} from "./OrkestChatFrame";
 import { createRenderer } from "./testing";
 
 it("keeps unavailable destinations out of the navigation and rejects unsafe URLs", async () => {
@@ -72,6 +77,35 @@ it("shows only explicit validated Board and Dossier links", async () => {
     ).toBe("noopener noreferrer");
     expect(orkestChatUrlParse("data:text/html,hi")).toBeUndefined();
     expect(orkestChatUrlParse("https://orkest.example/path")).toBe("https://orkest.example/path");
+});
+
+it("opens linked work only from a tenant-bound canonical Board address", async () => {
+    const boardUrl = "https://orkest.example/x/orkest/board?tenantId=tenant%2Fone&discard=1";
+    const view = createRenderer().render(
+        () => (
+            <OrkestChatFrame boardUrl={boardUrl} enabled linkedWorkTaskId="task 7">
+                <div>Conversation body</div>
+            </OrkestChatFrame>
+        ),
+        { width: 920, height: 640, padding: 0 },
+    );
+    await view.ready();
+
+    const link = view.$('[data-testid="orkest-linked-work"]').element;
+    expect(link.textContent).toBe("Open linked work");
+    expect(new URL(link.getAttribute("href") as string).pathname).toBe("/x/orkest/work-context");
+    expect(new URL(link.getAttribute("href") as string).searchParams.get("taskId")).toBe("task 7");
+    expect(new URL(link.getAttribute("href") as string).searchParams.get("tenantId")).toBe(
+        "tenant/one",
+    );
+    expect(new URL(link.getAttribute("href") as string).searchParams.get("discard")).toBeNull();
+    expect(orkestWorkContextUrl("https://orkest.example/x/orkest/board", "task")).toBeUndefined();
+    expect(
+        orkestWorkContextUrl("https://orkest.example/x/orkest/board?tenantId=a&tenantId=b", "task"),
+    ).toBeUndefined();
+    expect(
+        orkestWorkContextUrl("https://orkest.example/elsewhere?tenantId=a", "task"),
+    ).toBeUndefined();
 });
 
 it("states when an explicit task handoff cannot be resolved yet", async () => {

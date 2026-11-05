@@ -6,6 +6,8 @@ export type OrkestChatFrameProps = {
     readonly enabled: boolean;
     /** The configured Board address. Missing or unsafe addresses are omitted. */
     readonly boardUrl?: string;
+    /** The current native Happy task's exact ID; never inferred from its transcript. */
+    readonly linkedWorkTaskId?: string;
     /** The configured global Dossiers index address. It is not a work-item association. */
     readonly dossierUrl?: string;
     /** Truthful state while an explicit native task deep link is resolved. */
@@ -40,11 +42,49 @@ export function orkestChatUrlParse(value: string | undefined): string | undefine
     return undefined;
 }
 
+/** Build the canonical work-context destination only from the launcher-bound Board URL. */
+export function orkestWorkContextUrl(
+    boardUrlValue: string | undefined,
+    taskIdValue: string | undefined,
+): string | undefined {
+    const boardHref = orkestChatUrlParse(boardUrlValue);
+    if (
+        taskIdValue === undefined ||
+        taskIdValue.length === 0 ||
+        taskIdValue.length > 256 ||
+        taskIdValue.trim() !== taskIdValue ||
+        /[\p{Cc}]/u.test(taskIdValue)
+    )
+        return undefined;
+    if (boardHref === undefined) return undefined;
+
+    const board = new URL(boardHref);
+    if (board.pathname.replace(/\/+$/u, "") !== "/x/orkest/board") return undefined;
+    const tenantIds = board.searchParams.getAll("tenantId");
+    const tenantId = tenantIds[0];
+    if (
+        tenantIds.length !== 1 ||
+        tenantId === undefined ||
+        tenantId.length === 0 ||
+        tenantId.length > 256 ||
+        tenantId.trim() !== tenantId ||
+        /[\p{Cc}]/u.test(tenantId)
+    )
+        return undefined;
+
+    const destination = new URL(board.origin);
+    destination.pathname = "/x/orkest/work-context";
+    destination.searchParams.set("taskId", taskIdValue);
+    destination.searchParams.set("tenantId", tenantId);
+    return destination.href;
+}
+
 /** Orkest's optional renderer chrome; its child is the existing native Happy workspace. */
 export function OrkestChatFrame(props: OrkestChatFrameProps) {
     if (!props.enabled) return props.children;
     const boardUrl = orkestChatUrlParse(props.boardUrl);
     const dossierUrl = orkestChatUrlParse(props.dossierUrl);
+    const workContextUrl = orkestWorkContextUrl(props.boardUrl, props.linkedWorkTaskId);
     const taskHandoffMessage =
         props.taskHandoffStatus === "loading"
             ? "Looking for that task in this Happy Agent…"
@@ -83,6 +123,17 @@ export function OrkestChatFrame(props: OrkestChatFrameProps) {
                                 target="_blank"
                             >
                                 Dossiers
+                            </a>
+                        ) : null}
+                        {workContextUrl ? (
+                            <a
+                                aria-label="Open linked work"
+                                data-testid="orkest-linked-work"
+                                href={workContextUrl}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                            >
+                                Open linked work
                             </a>
                         ) : null}
                     </nav>

@@ -44,6 +44,21 @@ export function orkestTaskIdParse(value: unknown): string | undefined {
         : undefined;
 }
 
+/** Find a task only for the exact conversation currently routed in one agent's catalog. */
+export function orkestTaskForConversation(
+    catalog: HappyAgentSessionListSnapshot | undefined,
+    groupId: string | undefined,
+    conversationId: string | undefined,
+): HappyAgentTask | undefined {
+    if (catalog === undefined || groupId === undefined || conversationId === undefined)
+        return undefined;
+    const matches = [...catalog.tasks, ...catalog.taskDirectory, ...catalog.tasksArchived].filter(
+        (task) => task.workspaceId === groupId && task.conversation.id === conversationId,
+    );
+    const unique = new Map(matches.map((task) => [task.id, task]));
+    return unique.size === 1 ? unique.values().next().value : undefined;
+}
+
 /** Query and boot IDs share one opt-in gate; a normal query wins when enabled. */
 export function orkestTaskHandoffRequestedId(
     enabled: boolean,
