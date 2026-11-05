@@ -11,7 +11,9 @@ describe("browser-local Orkest task boot", () => {
             forceHome: true,
         });
         const boot = orkestTaskBootRead("?taskId=task-7", true, parseTestTaskId);
+        expect(boot.initialHandoff?.pendingTaskId).toBe("task-7");
         expect(boot.initialHandoff?.consume()).toBe(true);
+        expect(boot.initialHandoff?.pendingTaskId).toBeUndefined();
         expect(boot.initialHandoff?.consume()).toBe(false);
     });
 

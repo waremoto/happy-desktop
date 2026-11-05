@@ -28,6 +28,8 @@ export type OrkestTaskHandoffResolution =
 /** Stable one-shot handoff state lives with the router, across route unmounts. */
 export interface OrkestTaskInitialHandoff {
     readonly taskId: string;
+    /** Undefined after opening; prevents a stale boot ID from showing on another machine. */
+    readonly pendingTaskId: string | undefined;
     consume(): boolean;
 }
 

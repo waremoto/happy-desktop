@@ -26,6 +26,9 @@ export function orkestTaskBootRead(
     let consumed = false;
     const initialHandoff: OrkestTaskInitialHandoff = {
         taskId,
+        get pendingTaskId() {
+            return consumed ? undefined : taskId;
+        },
         consume() {
             if (consumed) return false;
             consumed = true;
