@@ -14,6 +14,7 @@ import {
     happyAgentRouterHappyLinkOpen,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
+    orkestTaskIdParse,
     type AppHappyAgentDaemonStore,
     type AppHappyAgentUpdateStore,
     type AppHappyAgentReleaseNotesStore,
@@ -122,6 +123,7 @@ import {
 } from "./happyAgentDirectoryStore";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
+import { orkestTaskBootRead } from "./orkestTaskBoot";
 import { localWebBuild } from "./localWebBuild";
 import {
     localWebUpdateStoreCreate,
@@ -404,6 +406,7 @@ function HappyAgentBoundary(props: {
     orkestChatReference?: boolean;
     orkestBoardUrl?: string;
     orkestDossierUrl?: string;
+    orkestInitialTaskId?: string;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
     router: HappyAgentRouter;
@@ -475,6 +478,9 @@ function HappyAgentBoundary(props: {
                 ...(props.orkestDossierUrl === undefined
                     ? {}
                     : { orkestDossierUrl: props.orkestDossierUrl }),
+                ...(props.orkestInitialTaskId === undefined
+                    ? {}
+                    : { orkestInitialTaskId: props.orkestInitialTaskId }),
                 happyAgents: props.happyAgents,
                 settings: props.settings,
                 titleShimmer: props.titleShimmer,
@@ -720,6 +726,7 @@ interface DesktopRendererProps {
     orkestChatReference?: boolean;
     orkestBoardUrl?: string;
     orkestDossierUrl?: string;
+    orkestInitialTaskId?: string;
     happyAgentRouter: HappyAgentRouter;
     happyAgents: HappyAgentDirectoryStore;
     settings: HappyAgentSettingsStore;
@@ -1188,6 +1195,9 @@ function DesktopRuntimeContent(
             {...(props.orkestDossierUrl === undefined
                 ? {}
                 : { orkestDossierUrl: props.orkestDossierUrl })}
+            {...(props.orkestInitialTaskId === undefined
+                ? {}
+                : { orkestInitialTaskId: props.orkestInitialTaskId })}
             router={props.happyAgentRouter}
             happyAgents={props.happyAgents}
             settings={props.settings}
@@ -1202,6 +1212,11 @@ function DesktopRuntimeContent(
 // injects (an inline script would be blocked by the page's script-src policy).
 const browserLocal =
     document.querySelector('meta[name="happy-browser-local"]')?.getAttribute("content") === "1";
+const orkestTaskBoot = orkestTaskBootRead(
+    window.location.search,
+    browserLocal && import.meta.env.VITE_ORKEST_CHAT_REFERENCE === "1",
+    orkestTaskIdParse,
+);
 const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
 desktopRowHeightCheckInstall();
 const root = createRoot(document.getElementById("root")!);
@@ -1346,6 +1361,7 @@ if (mediaPreviewBridge) {
         // here and the session store navigates through it when a conversation it
         // created should be opened.
         const happyAgentHistory = happyAgentHistoryCreate({
+            ...(orkestTaskBoot.forceHome ? { initialEntries: [{ kind: "home" as const }] } : {}),
             browser: false,
             persistence: desktopHistoryPersistence(),
         });
@@ -1966,6 +1982,9 @@ if (mediaPreviewBridge) {
                         orkestChatReference={
                             browserLocal && import.meta.env.VITE_ORKEST_CHAT_REFERENCE === "1"
                         }
+                        {...(orkestTaskBoot.taskId === undefined
+                            ? {}
+                            : { orkestInitialTaskId: orkestTaskBoot.taskId })}
                         {...(browserLocal && import.meta.env.VITE_ORKEST_BOARD_URL
                             ? { orkestBoardUrl: import.meta.env.VITE_ORKEST_BOARD_URL }
                             : {})}

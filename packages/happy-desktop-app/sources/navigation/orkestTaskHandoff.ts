@@ -25,9 +25,13 @@ export type OrkestTaskHandoffResolution =
           readonly location: HappyAgentSessionLocation;
       };
 
-/** A query value is an ID only when it is one nonempty, trimmed value. */
+/** An ID must be exact, bounded, and free of control characters. */
 export function orkestTaskIdParse(value: unknown): string | undefined {
-    return typeof value === "string" && value.length > 0 && value.trim() === value
+    return typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= 256 &&
+        value.trim() === value &&
+        !/[\p{Cc}]/u.test(value)
         ? value
         : undefined;
 }

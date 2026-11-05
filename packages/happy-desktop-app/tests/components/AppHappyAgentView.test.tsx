@@ -8,6 +8,7 @@ import type {
     HappyAgentPanelSnapshot,
     HappyAgentPanelStore,
     HappyAgentPanelTabId,
+    HappyAgentTask,
     HappyAgentWorkspaceStore,
 } from "happy-desktop-state";
 import {
@@ -69,11 +70,13 @@ function panel(): HappyAgentPanelStore {
     } as unknown as HappyAgentPanelStore;
 }
 
-function workspace(): HappyAgentWorkspaceStore {
+function workspace(tasks: readonly HappyAgentTask[] = []): HappyAgentWorkspaceStore {
     const snapshot = {
         list: {
             bots: [],
-            tasks: [],
+            tasks,
+            taskDirectory: [],
+            tasksArchived: [],
             projects: {
                 type: "ready" as const,
                 value: [
@@ -151,6 +154,7 @@ const MODELS_LOADING = { type: "loading" } as const;
 function directory(
     host: HappyAgentHost,
     projects: AppHappyAgentDirectorySnapshot["happyAgents"][number]["projects"],
+    tasks: readonly HappyAgentTask[] = [],
 ) {
     const snapshot: AppHappyAgentDirectorySnapshot = {
         happyAgents: [
@@ -165,7 +169,7 @@ function directory(
                     connection: connection(),
                     host,
                     models: modelStore(),
-                    workspace: workspace(),
+                    workspace: workspace(tasks),
                 },
                 status: "connected",
             },
@@ -184,11 +188,20 @@ function view(
         chatId?: string;
         groupId?: string;
         host?: HappyAgentHost;
+        happyAgentId?: string;
+        orkestChatReference?: boolean;
+        orkestInitialTaskId?: string;
+        tasks?: readonly HappyAgentTask[];
+        onOrkestTaskOpen?: (
+            happyAgentId: string,
+            location: { groupId: string; sessionId: string },
+        ) => void;
         onChatSelect?: (happyAgentId: string, groupId: string | undefined, chatId?: string) => void;
     } = {},
 ) {
+    const taskList = options.tasks ?? [];
     const projects = (
-        workspace().get() as unknown as {
+        workspace(taskList).get() as unknown as {
             list: {
                 projects: {
                     value: AppHappyAgentDirectorySnapshot["happyAgents"][number]["projects"];
@@ -196,19 +209,21 @@ function view(
             };
         }
     ).list.projects.value;
-    return render(
-        <AppHappyAgentView
-            appearance={appearanceStoreCreate({ mode: "light" })}
-            chatId={options.chatId}
-            groupId={options.groupId}
-            onChatSelect={options.onChatSelect ?? (() => undefined)}
-            onFileClose={() => undefined}
-            onFileSelect={() => undefined}
-            onSettingsOpen={() => undefined}
-            happyAgentId="local"
-            happyAgents={directory(options.host ?? happyAgentHostNoop, projects)}
-        />,
-    );
+    const props = {
+        appearance: appearanceStoreCreate({ mode: "light" }),
+        chatId: options.chatId,
+        groupId: options.groupId,
+        orkestChatReference: options.orkestChatReference,
+        orkestInitialTaskId: options.orkestInitialTaskId,
+        onOrkestTaskOpen: options.onOrkestTaskOpen,
+        onChatSelect: options.onChatSelect ?? (() => undefined),
+        onFileClose: () => undefined,
+        onFileSelect: () => undefined,
+        onSettingsOpen: () => undefined,
+        happyAgentId: options.happyAgentId ?? "local",
+        happyAgents: directory(options.host ?? happyAgentHostNoop, projects, taskList),
+    };
+    return { ...render(<AppHappyAgentView {...props} />), props };
 }
 
 it("leaves the sidebar head to the window band, with no local-only title", () => {
@@ -263,6 +278,42 @@ it("lists one row per project and its sessions as tabs", () => {
     const tabs = [...container.querySelectorAll('[data-happy-desktop-ui="tab"]')];
     expect(tabs.map((tab) => tab.getAttribute("data-tab-id"))).toEqual(["ses_one"]);
     expect(tabs[0]?.textContent).toContain("Fix token rotation race");
+});
+
+it("opens an initial native task once, even if the reader changes away and back", () => {
+    const opened: [string, { groupId: string; sessionId: string }][] = [];
+    const task: HappyAgentTask = {
+        id: "attended-task-1" as HappyAgentTask["id"],
+        workspaceId: "workspace-1" as HappyAgentTask["workspaceId"],
+        name: "Attended task",
+        conversation: {
+            id: "conversation-1",
+            title: "Attended task",
+            activity: "idle",
+            updatedAt: 0,
+            participants: [],
+        },
+        subtasks: [],
+        owner: null,
+        path: "/work",
+        displayPath: "/work",
+        createdAt: 0,
+        archived: false,
+        canArchive: true,
+    };
+    const rendered = view({
+        happyAgentId: "local",
+        orkestChatReference: true,
+        orkestInitialTaskId: task.id,
+        tasks: [task],
+        onOrkestTaskOpen: (happyAgentId, location) => opened.push([happyAgentId, location]),
+    });
+
+    expect(opened).toEqual([["local", { groupId: "workspace-1", sessionId: "conversation-1" }]]);
+
+    rendered.rerender(<AppHappyAgentView {...rendered.props} happyAgentId="other" />);
+    rendered.rerender(<AppHappyAgentView {...rendered.props} happyAgentId="local" />);
+    expect(opened).toHaveLength(1);
 });
 
 /* Command-W follows the keyboard: a tab of the right pane while focus is in
