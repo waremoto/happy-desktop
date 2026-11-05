@@ -7,9 +7,12 @@ const parseTestTaskId = (value: unknown) =>
 describe("browser-local Orkest task boot", () => {
     it("captures one opted-in task ID and asks history to start at home", () => {
         expect(orkestTaskBootRead("?taskId=task-7", true, parseTestTaskId)).toEqual({
-            taskId: "task-7",
+            initialHandoff: expect.objectContaining({ taskId: "task-7" }),
             forceHome: true,
         });
+        const boot = orkestTaskBootRead("?taskId=task-7", true, parseTestTaskId);
+        expect(boot.initialHandoff?.consume()).toBe(true);
+        expect(boot.initialHandoff?.consume()).toBe(false);
     });
 
     it.each([

@@ -22,6 +22,7 @@ import {
     type AppHappyAgentDebugStore,
     type AppHappyAgentProfilerStore,
     type HappyAgentRouter,
+    type OrkestTaskInitialHandoff,
 } from "happy-desktop-app";
 import { desktopHappyOnboardingHostCreate } from "./desktopHappyOnboardingHost";
 import {
@@ -406,7 +407,7 @@ function HappyAgentBoundary(props: {
     orkestChatReference?: boolean;
     orkestBoardUrl?: string;
     orkestDossierUrl?: string;
-    orkestInitialTaskId?: string;
+    orkestInitialTaskHandoff?: OrkestTaskInitialHandoff;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
     router: HappyAgentRouter;
@@ -478,9 +479,9 @@ function HappyAgentBoundary(props: {
                 ...(props.orkestDossierUrl === undefined
                     ? {}
                     : { orkestDossierUrl: props.orkestDossierUrl }),
-                ...(props.orkestInitialTaskId === undefined
+                ...(props.orkestInitialTaskHandoff === undefined
                     ? {}
-                    : { orkestInitialTaskId: props.orkestInitialTaskId }),
+                    : { orkestInitialTaskHandoff: props.orkestInitialTaskHandoff }),
                 happyAgents: props.happyAgents,
                 settings: props.settings,
                 titleShimmer: props.titleShimmer,
@@ -726,7 +727,7 @@ interface DesktopRendererProps {
     orkestChatReference?: boolean;
     orkestBoardUrl?: string;
     orkestDossierUrl?: string;
-    orkestInitialTaskId?: string;
+    orkestInitialTaskHandoff?: OrkestTaskInitialHandoff;
     happyAgentRouter: HappyAgentRouter;
     happyAgents: HappyAgentDirectoryStore;
     settings: HappyAgentSettingsStore;
@@ -1195,9 +1196,9 @@ function DesktopRuntimeContent(
             {...(props.orkestDossierUrl === undefined
                 ? {}
                 : { orkestDossierUrl: props.orkestDossierUrl })}
-            {...(props.orkestInitialTaskId === undefined
+            {...(props.orkestInitialTaskHandoff === undefined
                 ? {}
-                : { orkestInitialTaskId: props.orkestInitialTaskId })}
+                : { orkestInitialTaskHandoff: props.orkestInitialTaskHandoff })}
             router={props.happyAgentRouter}
             happyAgents={props.happyAgents}
             settings={props.settings}
@@ -1982,9 +1983,9 @@ if (mediaPreviewBridge) {
                         orkestChatReference={
                             browserLocal && import.meta.env.VITE_ORKEST_CHAT_REFERENCE === "1"
                         }
-                        {...(orkestTaskBoot.taskId === undefined
+                        {...(orkestTaskBoot.initialHandoff === undefined
                             ? {}
-                            : { orkestInitialTaskId: orkestTaskBoot.taskId })}
+                            : { orkestInitialTaskHandoff: orkestTaskBoot.initialHandoff })}
                         {...(browserLocal && import.meta.env.VITE_ORKEST_BOARD_URL
                             ? { orkestBoardUrl: import.meta.env.VITE_ORKEST_BOARD_URL }
                             : {})}

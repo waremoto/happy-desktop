@@ -76,7 +76,12 @@ import {
     type AppHappyAgentProfilerStore,
 } from "../views/AppHappyAgentSettingsView";
 import type { AppHappyAgentReleaseNotesStore, AppHappyAgentUpdateStore } from "../agentUpdate";
-import { orkestTaskHandoffSearch, orkestTaskIdParse } from "./orkestTaskHandoff";
+import {
+    orkestTaskHandoffRequestedId,
+    orkestTaskHandoffSearch,
+    orkestTaskIdParse,
+    type OrkestTaskInitialHandoff,
+} from "./orkestTaskHandoff";
 
 /**
  * Everything the local route tree needs that the URL does not address: the
@@ -94,7 +99,7 @@ export interface HappyAgentRouterContext {
     /** Explicit global Dossiers index link, omitted when absent or invalid. */
     readonly orkestDossierUrl?: string;
     /** One-shot task ID captured before browser-local custom history drops URL search. */
-    readonly orkestInitialTaskId?: string;
+    readonly orkestInitialTaskHandoff?: OrkestTaskInitialHandoff;
     /** Whether this desktop fills logins saved in the person's browsers, whatever agent is connected. */
     readonly browserPasswordsAvailable?: boolean;
     /** A remote daemon uses its own setup inside this connection's router. */
@@ -601,13 +606,18 @@ function HappyAgentWorkspaceLayout() {
     // carries no `chatId`.
     const params = useParams({ strict: false });
     const search = useSearch({ strict: false }) as { readonly taskId?: unknown };
-    const initialOrkestTaskId = orkestChatReferenceEnabled(
+    const orkestTaskHandoffEnabled = orkestChatReferenceEnabled(
         context.orkestChatReference,
         context.platform,
-    )
-        ? orkestTaskIdParse(context.orkestInitialTaskId)
+    );
+    const initialOrkestTaskHandoff = orkestTaskHandoffEnabled
+        ? context.orkestInitialTaskHandoff
         : undefined;
-    const requestedOrkestTaskId = orkestTaskIdParse(search.taskId) ?? initialOrkestTaskId;
+    const requestedOrkestTaskId = orkestTaskHandoffRequestedId(
+        orkestTaskHandoffEnabled,
+        search.taskId,
+        initialOrkestTaskHandoff?.taskId,
+    );
     // What the content region shows, by the routes matched under this one
     // layout: the window around it stays the same instance at every address.
     const matched = new Set<string>(useMatches().map((match) => match.routeId));
@@ -639,9 +649,9 @@ function HappyAgentWorkspaceLayout() {
             {...(requestedOrkestTaskId === undefined
                 ? {}
                 : { orkestTaskId: requestedOrkestTaskId })}
-            {...(initialOrkestTaskId === undefined
+            {...(initialOrkestTaskHandoff === undefined
                 ? {}
-                : { orkestInitialTaskId: initialOrkestTaskId })}
+                : { orkestInitialTaskHandoff: initialOrkestTaskHandoff })}
             onOrkestTaskOpen={(happyAgentId, location) =>
                 happyAgentRouterConversationOpen(router, happyAgentId, location)
             }

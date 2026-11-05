@@ -67,9 +67,11 @@ export {
 } from "./navigation/happyAgentRouter";
 export {
     orkestTaskHandoffResolve,
+    orkestTaskHandoffRequestedId,
     orkestTaskHandoffSearch,
     orkestTaskIdParse,
     type OrkestTaskHandoffResolution,
+    type OrkestTaskInitialHandoff,
 } from "./navigation/orkestTaskHandoff";
 export { DesktopStartupScreen, type DesktopStartupValues } from "happy-desktop-ui";
 export {

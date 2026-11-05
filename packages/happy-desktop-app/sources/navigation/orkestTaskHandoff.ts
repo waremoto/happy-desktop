@@ -25,6 +25,12 @@ export type OrkestTaskHandoffResolution =
           readonly location: HappyAgentSessionLocation;
       };
 
+/** Stable one-shot handoff state lives with the router, across route unmounts. */
+export interface OrkestTaskInitialHandoff {
+    readonly taskId: string;
+    consume(): boolean;
+}
+
 /** An ID must be exact, bounded, and free of control characters. */
 export function orkestTaskIdParse(value: unknown): string | undefined {
     return typeof value === "string" &&
@@ -34,6 +40,16 @@ export function orkestTaskIdParse(value: unknown): string | undefined {
         !/[\p{Cc}]/u.test(value)
         ? value
         : undefined;
+}
+
+/** Query and boot IDs share one opt-in gate; a normal query wins when enabled. */
+export function orkestTaskHandoffRequestedId(
+    enabled: boolean,
+    queryValue: unknown,
+    initialValue: unknown,
+): string | undefined {
+    if (!enabled) return undefined;
+    return orkestTaskIdParse(queryValue) ?? orkestTaskIdParse(initialValue);
 }
 
 /** Resolve only in the explicitly addressed Happy Agent's catalog. */
