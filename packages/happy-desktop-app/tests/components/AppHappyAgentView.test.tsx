@@ -156,12 +156,13 @@ function directory(
     host: HappyAgentHost,
     projects: AppHappyAgentDirectorySnapshot["happyAgents"][number]["projects"],
     tasks: readonly HappyAgentTask[] = [],
+    happyAgentId = "local",
 ) {
     const snapshot: AppHappyAgentDirectorySnapshot = {
         happyAgents: [
             {
                 bots: [],
-                id: "local",
+                id: happyAgentId,
                 label: "This Mac",
                 projects,
                 projectsStatus: "ready",
@@ -190,6 +191,7 @@ function view(
         groupId?: string;
         host?: HappyAgentHost;
         happyAgentId?: string;
+        platform?: "desktop" | "web";
         orkestChatReference?: boolean;
         orkestInitialTaskHandoff?: OrkestTaskInitialHandoff;
         tasks?: readonly HappyAgentTask[];
@@ -214,6 +216,7 @@ function view(
         appearance: appearanceStoreCreate({ mode: "light" }),
         chatId: options.chatId,
         groupId: options.groupId,
+        platform: options.platform,
         orkestChatReference: options.orkestChatReference,
         orkestInitialTaskHandoff: options.orkestInitialTaskHandoff,
         onOrkestTaskOpen: options.onOrkestTaskOpen,
@@ -222,7 +225,12 @@ function view(
         onFileSelect: () => undefined,
         onSettingsOpen: () => undefined,
         happyAgentId: options.happyAgentId ?? "local",
-        happyAgents: directory(options.host ?? happyAgentHostNoop, projects, taskList),
+        happyAgents: directory(
+            options.host ?? happyAgentHostNoop,
+            projects,
+            taskList,
+            options.happyAgentId ?? "local",
+        ),
     };
     return { ...render(<AppHappyAgentView {...props} />), props };
 }
@@ -281,7 +289,7 @@ it("lists one row per project and its sessions as tabs", () => {
     expect(tabs[0]?.textContent).toContain("Fix token rotation race");
 });
 
-it("does not reopen an initial native task after the chat layout unmounts", () => {
+it("keeps an initial task pending until found and suppresses its stale banner after unmount", () => {
     const opened: [string, { groupId: string; sessionId: string }][] = [];
     const task: HappyAgentTask = {
         id: "attended-task-1" as HappyAgentTask["id"],
@@ -305,14 +313,18 @@ it("does not reopen an initial native task after the chat layout unmounts", () =
     let consumed = false;
     const initialTaskHandoff: OrkestTaskInitialHandoff = {
         taskId: task.id,
+        get pendingTaskId() {
+            return consumed ? undefined : task.id;
+        },
         consume() {
             if (consumed) return false;
             consumed = true;
             return true;
         },
     };
-    const options = {
+    const options: Parameters<typeof view>[0] = {
         happyAgentId: "local",
+        platform: "web",
         orkestChatReference: true,
         orkestInitialTaskHandoff: initialTaskHandoff,
         tasks: [task],
@@ -321,13 +333,22 @@ it("does not reopen an initial native task after the chat layout unmounts", () =
             location: { groupId: string; sessionId: string },
         ) => opened.push([happyAgentId, location]),
     };
+    const waiting = view({ ...options, tasks: [] });
+    expect(opened).toHaveLength(0);
+    expect(initialTaskHandoff.pendingTaskId).toBe(task.id);
+    expect(waiting.container.textContent).toContain(
+        "That task is not in this Happy Agent’s task list.",
+    );
+    waiting.unmount();
+
     const rendered = view(options);
 
     expect(opened).toEqual([["local", { groupId: "workspace-1", sessionId: "conversation-1" }]]);
 
     rendered.unmount();
-    view(options);
+    const remounted = view({ ...options, happyAgentId: "other", tasks: [] });
     expect(opened).toHaveLength(1);
+    expect(remounted.container.querySelector('[data-testid="orkest-task-handoff"]')).toBeNull();
 });
 
 /* Command-W follows the keyboard: a tab of the right pane while focus is in

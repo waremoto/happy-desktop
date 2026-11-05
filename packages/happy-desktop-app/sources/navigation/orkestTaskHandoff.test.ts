@@ -38,6 +38,7 @@ describe("Orkest native task handoff", () => {
         expect(orkestTaskHandoffRequestedId(false, "query-task", "boot-task")).toBeUndefined();
         expect(orkestTaskHandoffRequestedId(true, "query-task", "boot-task")).toBe("query-task");
         expect(orkestTaskHandoffRequestedId(true, undefined, "boot-task")).toBe("boot-task");
+        expect(orkestTaskHandoffRequestedId(true, "later-query", undefined)).toBe("later-query");
     });
 
     it("opens only the exact task in the selected connected catalog", () => {

@@ -616,7 +616,7 @@ function HappyAgentWorkspaceLayout() {
     const requestedOrkestTaskId = orkestTaskHandoffRequestedId(
         orkestTaskHandoffEnabled,
         search.taskId,
-        initialOrkestTaskHandoff?.taskId,
+        initialOrkestTaskHandoff?.pendingTaskId,
     );
     // What the content region shows, by the routes matched under this one
     // layout: the window around it stays the same instance at every address.

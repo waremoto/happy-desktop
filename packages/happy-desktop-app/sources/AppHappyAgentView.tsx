@@ -3529,7 +3529,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         orkestTaskListGetNone,
     );
     const initialTaskHandoff = props.orkestInitialTaskHandoff;
-    const initialTaskId = orkestTaskIdParse(initialTaskHandoff?.taskId);
+    const initialTaskId = orkestTaskIdParse(initialTaskHandoff?.pendingTaskId);
     const taskHandoff = orkestTaskHandoffResolve(
         orkestTaskIdParse(props.orkestTaskId) ?? initialTaskId,
         selectedHappyAgent?.status,
