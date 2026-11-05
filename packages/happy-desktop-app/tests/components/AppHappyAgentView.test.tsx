@@ -24,6 +24,7 @@ import {
     type AppHappyAgentDirectorySnapshot,
     type AppHappyAgentDirectoryStore,
 } from "../../sources/AppHappyAgentView";
+import type { OrkestTaskInitialHandoff } from "../../sources/navigation/orkestTaskHandoff";
 
 /* The local workspace renders the shared cloud components with local product
  * state. These tests pin the parts of that contract the app layer owns: which
@@ -190,7 +191,7 @@ function view(
         host?: HappyAgentHost;
         happyAgentId?: string;
         orkestChatReference?: boolean;
-        orkestInitialTaskId?: string;
+        orkestInitialTaskHandoff?: OrkestTaskInitialHandoff;
         tasks?: readonly HappyAgentTask[];
         onOrkestTaskOpen?: (
             happyAgentId: string,
@@ -214,7 +215,7 @@ function view(
         chatId: options.chatId,
         groupId: options.groupId,
         orkestChatReference: options.orkestChatReference,
-        orkestInitialTaskId: options.orkestInitialTaskId,
+        orkestInitialTaskHandoff: options.orkestInitialTaskHandoff,
         onOrkestTaskOpen: options.onOrkestTaskOpen,
         onChatSelect: options.onChatSelect ?? (() => undefined),
         onFileClose: () => undefined,
@@ -280,7 +281,7 @@ it("lists one row per project and its sessions as tabs", () => {
     expect(tabs[0]?.textContent).toContain("Fix token rotation race");
 });
 
-it("opens an initial native task once, even if the reader changes away and back", () => {
+it("does not reopen an initial native task after the chat layout unmounts", () => {
     const opened: [string, { groupId: string; sessionId: string }][] = [];
     const task: HappyAgentTask = {
         id: "attended-task-1" as HappyAgentTask["id"],
@@ -301,18 +302,31 @@ it("opens an initial native task once, even if the reader changes away and back"
         archived: false,
         canArchive: true,
     };
-    const rendered = view({
+    let consumed = false;
+    const initialTaskHandoff: OrkestTaskInitialHandoff = {
+        taskId: task.id,
+        consume() {
+            if (consumed) return false;
+            consumed = true;
+            return true;
+        },
+    };
+    const options = {
         happyAgentId: "local",
         orkestChatReference: true,
-        orkestInitialTaskId: task.id,
+        orkestInitialTaskHandoff: initialTaskHandoff,
         tasks: [task],
-        onOrkestTaskOpen: (happyAgentId, location) => opened.push([happyAgentId, location]),
-    });
+        onOrkestTaskOpen: (
+            happyAgentId: string,
+            location: { groupId: string; sessionId: string },
+        ) => opened.push([happyAgentId, location]),
+    };
+    const rendered = view(options);
 
     expect(opened).toEqual([["local", { groupId: "workspace-1", sessionId: "conversation-1" }]]);
 
-    rendered.rerender(<AppHappyAgentView {...rendered.props} happyAgentId="other" />);
-    rendered.rerender(<AppHappyAgentView {...rendered.props} happyAgentId="local" />);
+    rendered.unmount();
+    view(options);
     expect(opened).toHaveLength(1);
 });
 

@@ -1,8 +1,10 @@
+import type { OrkestTaskInitialHandoff } from "happy-desktop-app";
+
 export type OrkestTaskIdParser = (value: unknown) => string | undefined;
 
 export interface OrkestTaskBoot {
-    /** One validated task ID captured from an opted-in browser-local URL. */
-    readonly taskId?: string;
+    /** Stable one-shot handoff captured from an opted-in browser-local URL. */
+    readonly initialHandoff?: OrkestTaskInitialHandoff;
     /** A direct handoff takes precedence over this renderer's saved route. */
     readonly forceHome: boolean;
 }
@@ -19,5 +21,16 @@ export function orkestTaskBootRead(
     if (values.length !== 1) return { forceHome: false };
 
     const taskId = parseTaskId(values[0]);
-    return taskId === undefined ? { forceHome: false } : { taskId, forceHome: true };
+    if (taskId === undefined) return { forceHome: false };
+
+    let consumed = false;
+    const initialHandoff: OrkestTaskInitialHandoff = {
+        taskId,
+        consume() {
+            if (consumed) return false;
+            consumed = true;
+            return true;
+        },
+    };
+    return { initialHandoff, forceHome: true };
 }

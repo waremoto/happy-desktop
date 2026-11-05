@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { HappyAgentSessionListSnapshot, HappyAgentTask } from "happy-desktop-state";
 import {
     orkestTaskHandoffResolve,
+    orkestTaskHandoffRequestedId,
     orkestTaskHandoffSearch,
     orkestTaskIdParse,
 } from "./orkestTaskHandoff";
@@ -31,6 +32,12 @@ describe("Orkest native task handoff", () => {
         expect(orkestTaskIdParse("orkest-task-1\u0085")).toBeUndefined();
         expect(orkestTaskIdParse("x".repeat(257))).toBeUndefined();
         expect(orkestTaskIdParse(undefined)).toBeUndefined();
+    });
+
+    it("gates both query and boot IDs behind the opt-in", () => {
+        expect(orkestTaskHandoffRequestedId(false, "query-task", "boot-task")).toBeUndefined();
+        expect(orkestTaskHandoffRequestedId(true, "query-task", "boot-task")).toBe("query-task");
+        expect(orkestTaskHandoffRequestedId(true, undefined, "boot-task")).toBe("boot-task");
     });
 
     it("opens only the exact task in the selected connected catalog", () => {
