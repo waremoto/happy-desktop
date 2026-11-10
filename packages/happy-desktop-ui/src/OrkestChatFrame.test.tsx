@@ -4,6 +4,7 @@ import { userEvent } from "vitest/browser";
 import "./theme.css";
 import {
     OrkestChatFrame,
+    orkestChatEmbedded,
     orkestChatReferenceEnabled,
     orkestChatUrlParse,
     orkestWorkContextUrl,
@@ -243,4 +244,35 @@ it("preserves child DOM identity and local state when configured links update", 
     expect(view.$('[data-testid="native-draft"]').element).toBe(input);
     expect(view.$('[data-testid="native-draft"]').element).toHaveValue("draft text");
     expect(view.$('a[href="https://orkest.example/board/1"]').element.textContent).toBe("Board");
+});
+
+// ORK-000015: framed by GhostShell, the frame keeps no chrome of its own.
+it("drops its header and inspector when GhostShell embeds it", async () => {
+    document.documentElement.dataset.orkestEmbed = "1";
+    try {
+        expect(orkestChatEmbedded()).toBe(true);
+        const view = createRenderer().render(
+            () => (
+                <OrkestChatFrame
+                    boardUrl="http://localhost:3002/x/orkest/board?tenantId=maremoto"
+                    enabled
+                    linkedWorkTask={{ id: "mm_1", name: "MM-1" }}
+                    taskHandoffStatus="loading"
+                >
+                    <div data-testid="native-chat">Native conversation</div>
+                </OrkestChatFrame>
+            ),
+            { width: 390, height: 640, padding: 0 },
+        );
+        await view.ready();
+        expect(view.$('[data-testid="native-chat"]').element.textContent).toBe("Native conversation");
+        const frame = document.querySelector('[data-orkest-chat-frame]');
+        expect(frame?.getAttribute("data-orkest-chat-frame")).toBe("embedded");
+        expect(frame?.querySelector("header")).toBeNull();
+        expect(frame?.querySelector('[data-testid="orkest-linked-work-inspector"]')).toBeNull();
+        expect(frame?.querySelector('[data-testid="orkest-task-handoff"]')).not.toBeNull();
+    } finally {
+        delete document.documentElement.dataset.orkestEmbed;
+    }
+    expect(orkestChatEmbedded()).toBe(false);
 });

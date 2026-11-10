@@ -125,6 +125,12 @@ import {
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { orkestTaskBootRead } from "./orkestTaskBoot";
+import {
+    orkestBridgeEndpoint,
+    orkestEmbedEnabled,
+    orkestEmbedThemeCreate,
+} from "./orkestEmbed";
+import "./orkestEmbed.css";
 import { localWebBuild } from "./localWebBuild";
 import {
     localWebUpdateStoreCreate,
@@ -1218,7 +1224,21 @@ const orkestTaskBoot = orkestTaskBootRead(
     browserLocal && import.meta.env.VITE_ORKEST_CHAT_REFERENCE === "1",
     orkestTaskIdParse,
 );
-const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
+// Orkest Chat (ORK-000015): GhostShell frames this build same-origin at
+// /x/orkest/chat. It owns the colour mode and the chrome; the bridge lives under
+// the prefix that served this document.
+const orkestEmbed = browserLocal && orkestEmbedEnabled(document);
+if (orkestEmbed) document.documentElement.dataset.orkestEmbed = "1";
+const orkestEmbedTheme = orkestEmbed
+    ? orkestEmbedThemeCreate(window, () =>
+          window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+      )
+    : undefined;
+const bridge =
+    window.happyDesktop ??
+    (browserLocal
+        ? browserDevBridgeCreate(orkestBridgeEndpoint(document.baseURI, orkestEmbed))
+        : undefined);
 desktopRowHeightCheckInstall();
 const root = createRoot(document.getElementById("root")!);
 // A todo list is laid over a picture; fetching and decoding both of them now
@@ -1397,25 +1417,32 @@ if (mediaPreviewBridge) {
         // Appearance is chosen for the window and shared by all connection UIs.
         shell ??= ((): DesktopShellStores => {
             const { store: created, writer } = appearanceStoreOwnedCreate({
-                mode: preferences.initialAppearance,
+                // Embedded, the mode is GhostShell's and never Happy's saved one.
+                mode: orkestEmbedTheme ? orkestEmbedTheme.get() : preferences.initialAppearance,
                 customTheme: config.customTheme ?? customThemeEmpty,
-                supportedModes:
-                    desktopBridge.desktopConfigSubscribe && desktopBridge.desktopConfigUpdate
+                supportedModes: orkestEmbedTheme
+                    ? ["dark", "light"]
+                    : desktopBridge.desktopConfigSubscribe && desktopBridge.desktopConfigUpdate
                         ? ["system", "dark", "light", "midnight", "custom"]
                         : ["system", "dark", "light"],
                 scrollbarVisibility: preferences.initialScrollbarVisibility,
             });
             appearanceReceive = (next) =>
                 writer.configReceived({
-                    mode: next.appearance,
+                    mode: orkestEmbedTheme ? orkestEmbedTheme.get() : next.appearance,
                     customTheme: next.customTheme ?? customThemeEmpty,
                     scrollbarVisibility: next.scrollbarVisibility,
                 });
             desktopAppearanceSynchronize(created, desktopBridge);
-            created.subscribe(() => {
-                const snapshot = created.get();
-                preferences.appearanceChanged(snapshot.mode, snapshot.scrollbarVisibility);
-            });
+            if (orkestEmbedTheme) {
+                // Follow GhostShell; the person's saved Happy appearance is untouched.
+                orkestEmbedTheme.subscribe(() => created.appearanceSelect(orkestEmbedTheme.get()));
+            } else {
+                created.subscribe(() => {
+                    const snapshot = created.get();
+                    preferences.appearanceChanged(snapshot.mode, snapshot.scrollbarVisibility);
+                });
+            }
             const store = browserLocal ? undefined : desktopDaemonStoreCreate(desktopBridge);
             return { appearance: created, ...(store ? { daemon: store } : {}) };
         })();

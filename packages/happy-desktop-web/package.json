@@ -2,6 +2,7 @@
     "name": "happy-desktop-web",
     "version": "0.0.0",
     "private": true,
+    "description": "Orkest Chat web renderer (a fork of Happy Place; see NOTICE)",
     "type": "module",
     "scripts": {
         "dev": "vite --host 127.0.0.1",

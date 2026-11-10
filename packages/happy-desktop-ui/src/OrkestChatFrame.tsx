@@ -79,10 +79,24 @@ export function orkestWorkContextUrl(
     return destination.href;
 }
 
+/**
+ * Orkest Chat (ORK-000015): GhostShell frames this renderer at /x/orkest/chat and
+ * marks the document `data-orkest-embed`. GhostShell then owns the chrome, so the
+ * frame drops its own header and inspector and keeps only the task handoff notice.
+ */
+export function orkestChatEmbedded(
+    root: Pick<HTMLElement, "dataset"> | undefined = typeof document === "undefined"
+        ? undefined
+        : document.documentElement,
+): boolean {
+    return root?.dataset.orkestEmbed === "1";
+}
+
 /** Orkest's optional renderer chrome; its child is the existing native Happy workspace. */
 export function OrkestChatFrame(props: OrkestChatFrameProps) {
     const [inspectorOpen, setInspectorOpen] = useState(true);
     if (!props.enabled) return props.children;
+    const embedded = orkestChatEmbedded();
     const boardUrl = orkestChatUrlParse(props.boardUrl);
     const dossierUrl = orkestChatUrlParse(props.dossierUrl);
     const workContextUrl = orkestWorkContextUrl(props.boardUrl, props.linkedWorkTask?.id);
@@ -96,6 +110,27 @@ export function OrkestChatFrame(props: OrkestChatFrameProps) {
                 : props.taskHandoffStatus === "notFound"
                   ? "That task is not in this Happy Agent’s task list."
                   : undefined;
+    if (embedded)
+        return (
+            <div
+                className="orkest-chat-frame orkest-chat-frame--embedded"
+                data-orkest-chat-frame="embedded"
+            >
+                {taskHandoffMessage ? (
+                    <p
+                        aria-live="polite"
+                        className="orkest-chat-frame__handoff"
+                        data-testid="orkest-task-handoff"
+                        role={props.taskHandoffStatus === "notFound" ? "alert" : "status"}
+                    >
+                        {taskHandoffMessage}
+                    </p>
+                ) : null}
+                <div className="orkest-chat-frame__body">
+                    <div className="orkest-chat-frame__content">{props.children}</div>
+                </div>
+            </div>
+        );
     return (
         <div className="orkest-chat-frame" data-orkest-chat-frame="true">
             <header className="orkest-chat-frame__header">

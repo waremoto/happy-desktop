@@ -1,5 +1,6 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Plugin } from "vite";
+import { timingSafeEqual } from "node:crypto";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
+import type { Connect, Plugin } from "vite";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
 import type { LocalHappyAgentConnection } from "./localHappyAgent";
 import { localHappyAgentConnectorCreate } from "./localHappyAgent";
@@ -20,6 +21,29 @@ export interface BrowserLocalHappyAgentOptions {
     readonly connect?: () => Promise<LocalHappyAgentConnection>;
     /** Overrides the normal home-directory config path for an isolated host. */
     readonly desktopConfigPath?: string;
+    /**
+     * Orkest Chat (ORK-000015): when set, every request (bridge routes and static
+     * files alike) must carry it in `x-orkest-chat-key`. The GhostShell dashboard is
+     * the only holder, so the loopback port stops being a front door to the daemon.
+     * Defaults to the `ORKEST_CHAT_KEY` environment variable.
+     */
+    readonly chatKey?: string;
+}
+
+const chatKeyHeader = "x-orkest-chat-key";
+
+/** Constant-time compare of the presented key; a missing or differently sized key fails. */
+export function orkestChatKeyAccepted(expected: string, presented: unknown): boolean {
+    if (typeof presented !== "string") return false;
+    const want = Buffer.from(expected, "utf8");
+    const got = Buffer.from(presented, "utf8");
+    return want.length === got.length && timingSafeEqual(want, got);
+}
+
+/** The slice of Vite's dev and preview servers this bridge uses. */
+interface BridgeHost {
+    readonly middlewares: Pick<Connect.Server, "use">;
+    readonly httpServer: Server | null | undefined;
 }
 
 /**
@@ -69,88 +93,122 @@ export function browserLocalHappyAgentPlugin(options: BrowserLocalHappyAgentOpti
             () => undefined,
         );
     };
+    const chatKey = options.chatKey ?? process.env.ORKEST_CHAT_KEY ?? "";
+    // Signal browser-local mode to the renderer without import.meta.env, so the
+    // shared renderer entry can pick the dev bridge over the web app. A meta tag
+    // (not an inline script) carries the flag because the page CSP forbids inline
+    // scripts, which would otherwise silently drop the signal. It also runs at
+    // build time (ORK-000015), so the built renderer `vite preview` serves carries
+    // the same flag; `orkest-embed` marks the build GhostShell frames at
+    // /x/orkest/chat.
+    const htmlTags = () => {
+        if (process.env.VITE_HAPPY_BROWSER_LOCAL !== "1") return;
+        return [
+            {
+                tag: "meta",
+                attrs: { name: "happy-browser-local", content: "1" },
+                injectTo: "head" as const,
+            },
+            ...(process.env.HAPPY_ORKEST_EMBED === "1"
+                ? [
+                      {
+                          tag: "meta",
+                          attrs: { name: "orkest-embed", content: "1" },
+                          injectTo: "head" as const,
+                      },
+                  ]
+                : []),
+        ];
+    };
+    const install = (server: BridgeHost, host: string | boolean | undefined, port: number): void => {
+        const configuredHost = typeof host === "string" ? host : "127.0.0.1";
+        const configuredPort = port;
+        const expectedHost = `${configuredHost}:${configuredPort}`;
+        const rendererOrigin = `http://${expectedHost}`;
+        // A terminal's bytes cannot ride the middleware stack, so the dev
+        // bridge claims the one upgrade path it owns and leaves every other
+        // upgrade — Vite's own HMR socket above all — to Vite's listeners.
+        const terminals = happyAgentTerminalBridgeCreate({
+            allowedOrigin: rendererOrigin,
+            client: () => runtime().then(({ connection }) => connection.client),
+            expectedHost: () => expectedHost,
+            prefix: endpoint,
+        });
+        server.httpServer?.on("upgrade", (request, socket, head) => {
+            // A keyed host has no browser front door: a terminal socket without the
+            // key is closed rather than handed to the daemon (ORK-000015).
+            if (
+                chatKey &&
+                (request.url ?? "").startsWith(endpoint) &&
+                !orkestChatKeyAccepted(chatKey, request.headers[chatKeyHeader])
+            ) {
+                socket.destroy();
+                return;
+            }
+            terminals.upgrade(request, socket, head);
+        });
+        // The same app-wide bridge host the packaged app has, held by this
+        // development server instead.
+        const deviceBridges = deviceBridgeHostCreate();
+        server.middlewares.use(async (request, response, next) => {
+            if (chatKey && !orkestChatKeyAccepted(chatKey, request.headers?.[chatKeyHeader])) {
+                json(response, 401, { error: "Orkest Chat key required." });
+                return;
+            }
+            const url = new URL(request.url ?? "/", "http://127.0.0.1");
+            const path = url.pathname;
+            // The exact endpoint is the browser development bridge for
+            // runtime and machine-local actions; everything under it is a
+            // Happy Agent or desktop-local route.
+            if (path === endpoint && request.method === "POST") {
+                await handleRequest(request, response, runtime, desktopConfig);
+                return;
+            }
+            if (path === endpoint || path.startsWith(`${endpoint}/`)) {
+                let pending: Promise<DevRuntime> | undefined;
+                try {
+                    pending = runtime();
+                    const active = await pending;
+                    deviceBridges.clientSet(active.connection.client);
+                    const bridgePath = path.slice(endpoint.length) || "/";
+                    const handled = await happyAgentProxyHandle({
+                        client: active.connection.client,
+                        deviceBridges,
+                        method: request.method ?? "GET",
+                        path: bridgePath,
+                        query: url.searchParams,
+                        request,
+                        response,
+                        onConnectionError: (error) => runtimeInvalidate(error, pending),
+                    });
+                    if (!handled && !response.headersSent) next();
+                } catch (error) {
+                    runtimeInvalidate(error, pending);
+                    if (!response.headersSent) json(response, 503, { error: message(error) });
+                }
+                return;
+            }
+            next();
+        });
+        server.httpServer?.once("close", () => {
+            void desktopConfigTask?.then((store) => store.close());
+            terminals.close();
+            void deviceBridges.close();
+            void runtimeTask?.then(({ connection }) => connection.close());
+        });
+    };
     return {
         name: "happy-browser-local-happy-agent",
-        apply: "serve",
-        transformIndexHtml() {
-            // Signal browser-local mode to the renderer without import.meta.env, so
-            // the shared renderer entry can pick the dev bridge over the web app. A
-            // meta tag (not an inline script) carries the flag because the page CSP
-            // forbids inline scripts, which would otherwise silently drop the signal.
-            if (process.env.VITE_HAPPY_BROWSER_LOCAL !== "1") return;
-            return [
-                {
-                    tag: "meta",
-                    attrs: { name: "happy-browser-local", content: "1" },
-                    injectTo: "head" as const,
-                },
-            ];
-        },
+        // No `apply`: the HTML flags are also needed at build time; the dev and
+        // preview hooks only ever run in their own commands.
+        transformIndexHtml: htmlTags,
         configureServer(server) {
-            const configuredHost =
-                typeof server.config.server.host === "string"
-                    ? server.config.server.host
-                    : "127.0.0.1";
-            const configuredPort = server.config.server.port ?? 5173;
-            const expectedHost = `${configuredHost}:${configuredPort}`;
-            const rendererOrigin = `http://${expectedHost}`;
-            // A terminal's bytes cannot ride the middleware stack, so the dev
-            // bridge claims the one upgrade path it owns and leaves every other
-            // upgrade — Vite's own HMR socket above all — to Vite's listeners.
-            const terminals = happyAgentTerminalBridgeCreate({
-                allowedOrigin: rendererOrigin,
-                client: () => runtime().then(({ connection }) => connection.client),
-                expectedHost: () => expectedHost,
-                prefix: endpoint,
-            });
-            server.httpServer?.on("upgrade", (request, socket, head) => {
-                terminals.upgrade(request, socket, head);
-            });
-            // The same app-wide bridge host the packaged app has, held by this
-            // development server instead.
-            const deviceBridges = deviceBridgeHostCreate();
-            server.middlewares.use(async (request, response, next) => {
-                const url = new URL(request.url ?? "/", "http://127.0.0.1");
-                const path = url.pathname;
-                // The exact endpoint is the browser development bridge for
-                // runtime and machine-local actions; everything under it is a
-                // Happy Agent or desktop-local route.
-                if (path === endpoint && request.method === "POST") {
-                    await handleRequest(request, response, runtime, desktopConfig);
-                    return;
-                }
-                if (path === endpoint || path.startsWith(`${endpoint}/`)) {
-                    let pending: Promise<DevRuntime> | undefined;
-                    try {
-                        pending = runtime();
-                        const active = await pending;
-                        deviceBridges.clientSet(active.connection.client);
-                        const bridgePath = path.slice(endpoint.length) || "/";
-                        const handled = await happyAgentProxyHandle({
-                            client: active.connection.client,
-                            deviceBridges,
-                            method: request.method ?? "GET",
-                            path: bridgePath,
-                            query: url.searchParams,
-                            request,
-                            response,
-                            onConnectionError: (error) => runtimeInvalidate(error, pending),
-                        });
-                        if (!handled && !response.headersSent) next();
-                    } catch (error) {
-                        runtimeInvalidate(error, pending);
-                        if (!response.headersSent) json(response, 503, { error: message(error) });
-                    }
-                    return;
-                }
-                next();
-            });
-            server.httpServer?.once("close", () => {
-                void desktopConfigTask?.then((store) => store.close());
-                terminals.close();
-                void deviceBridges.close();
-                void runtimeTask?.then(({ connection }) => connection.close());
-            });
+            install(server, server.config.server.host, server.config.server.port ?? 5173);
+        },
+        // ORK-000015: the built renderer runs under `vite preview` on lab1 and needs
+        // the same daemon bridge the development server carries.
+        configurePreviewServer(server) {
+            install(server, server.config.preview.host, server.config.preview.port ?? 4173);
         },
     };
 }

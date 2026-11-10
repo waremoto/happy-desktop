@@ -139,3 +139,77 @@ describe("browserLocalHappyAgentPlugin", () => {
         expect(connect).toHaveBeenCalledTimes(2);
     });
 });
+
+function previewMiddlewareOf(plugin: ReturnType<typeof browserLocalHappyAgentPlugin>): Middleware {
+    let middleware: Middleware | undefined;
+    const server = {
+        config: { preview: { host: "127.0.0.1", port: 5320 }, server: {} },
+        middlewares: {
+            use: (handler: Middleware) => {
+                middleware = handler;
+            },
+        },
+        httpServer: undefined,
+    };
+    const configure = (plugin as { configurePreviewServer?: unknown }).configurePreviewServer;
+    if (typeof configure !== "function") throw new Error("The plugin registered no preview server.");
+    (configure as (value: unknown) => void).call(plugin, server);
+    if (!middleware) throw new Error("The plugin registered no middleware.");
+    return middleware;
+}
+
+async function requestWith(
+    middleware: Middleware,
+    url: string,
+    headers: Record<string, string> = {},
+): Promise<Captured & { nextCalled: boolean }> {
+    const request = new EventEmitter() as unknown as IncomingMessage;
+    Object.assign(request, { method: "GET", url, headers });
+    const captured = fakeResponse();
+    let nextCalled = false;
+    await middleware(request, captured.response, () => {
+        nextCalled = true;
+    });
+    return { ...captured, nextCalled };
+}
+
+// ORK-000015 (Orkest Chat embed): the built renderer is served by `vite preview` on lab1 and reached only
+// through the GhostShell dashboard, which presents the shared key on every request.
+describe("Orkest Chat preview bridge", () => {
+    it("serves the daemon bridge from vite preview", async () => {
+        const connect = vi
+            .fn<() => Promise<LocalHappyAgentConnection>>()
+            .mockResolvedValue(connectionWith(() => Promise.resolve(healthReady("0.0.55"))));
+        const middleware = previewMiddlewareOf(browserLocalHappyAgentPlugin({ connect }));
+        const answered = await requestWith(middleware, `${endpoint}/health`);
+        expect(answered.status).toBe(200);
+    });
+
+    it("refuses every request without the chat key, assets included, before connecting", async () => {
+        const connect = vi.fn<() => Promise<LocalHappyAgentConnection>>();
+        const middleware = previewMiddlewareOf(
+            browserLocalHappyAgentPlugin({ connect, chatKey: "s3cret-key" }),
+        );
+        for (const url of ["/", "/assets/index.js", `${endpoint}/health`]) {
+            const refused = await requestWith(middleware, url);
+            expect(refused.status, url).toBe(401);
+            expect(refused.nextCalled, url).toBe(false);
+        }
+        const wrong = await requestWith(middleware, "/", { "x-orkest-chat-key": "s3cret-kez" });
+        expect(wrong.status).toBe(401);
+        expect(connect).not.toHaveBeenCalled();
+    });
+
+    it("lets a keyed request through to the bridge and to static files", async () => {
+        const connect = vi
+            .fn<() => Promise<LocalHappyAgentConnection>>()
+            .mockResolvedValue(connectionWith(() => Promise.resolve(healthReady("0.0.55"))));
+        const middleware = previewMiddlewareOf(
+            browserLocalHappyAgentPlugin({ connect, chatKey: "s3cret-key" }),
+        );
+        const headers = { "x-orkest-chat-key": "s3cret-key" };
+        expect((await requestWith(middleware, `${endpoint}/health`, headers)).status).toBe(200);
+        const asset = await requestWith(middleware, "/assets/index.js", headers);
+        expect(asset.nextCalled).toBe(true);
+    });
+});

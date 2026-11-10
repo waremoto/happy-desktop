@@ -12,7 +12,7 @@ import type {
     DesktopReactDevtoolsMessage,
 } from "../shared/desktopProfiler";
 
-const endpoint = "/__happy_local_happy_agent";
+const defaultEndpoint = "/__happy_local_happy_agent";
 const cloudAuthCallbackPath = "/cloud-auth/callback";
 let cloudAuthCallback =
     window.location.pathname === cloudAuthCallbackPath ? window.location.href : undefined;
@@ -52,7 +52,11 @@ interface DevResponse<Value> {
     value?: Value;
 }
 
-async function request<Value>(action: string, input?: unknown): Promise<Value> {
+async function request<Value>(
+    endpoint: string,
+    action: string,
+    input?: unknown,
+): Promise<Value> {
     const response = await fetch(endpoint, {
         body: JSON.stringify({ action, input }),
         headers: { "content-type": "application/json" },
@@ -71,7 +75,14 @@ async function request<Value>(action: string, input?: unknown): Promise<Value> {
  * while machine-local file operations use the exact endpoint and the remaining
  * native-only operations degrade explicitly.
  */
-export function browserDevBridgeCreate(): HappyDesktopBridge {
+/**
+ * `endpoint` is the bridge path; the Orkest Chat embed (ORK-000015) passes its
+ * prefixed one, because GhostShell serves the renderer under
+ * `/proxy/orkest/chat/<tenant>/`.
+ */
+export function browserDevBridgeCreate(endpoint: string = defaultEndpoint): HappyDesktopBridge {
+    const call = <Value,>(action: string, input?: unknown) =>
+        request<Value>(endpoint, action, input);
     return {
         // Browser-local development has no explicit Electron debug launch, so
         // it must not start the desktop-only live metrics sampler.
@@ -124,10 +135,10 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
             throw new Error("This window cannot open a separate preview window.");
         },
         directoryPick: async () => undefined,
-        desktopConfigGet: () => request<DesktopConfig>("desktopConfigGet"),
-        desktopConfigWrite: (config) => request<void>("desktopConfigWrite", config),
+        desktopConfigGet: () => call<DesktopConfig>("desktopConfigGet"),
+        desktopConfigWrite: (config) => call<void>("desktopConfigWrite", config),
         desktopConfigUpdate: (previous, next) =>
-            request<void>("desktopConfigUpdate", { previous, next }),
+            call<void>("desktopConfigUpdate", { previous, next }),
         // No live config subscription in browser development yet. Its appearance
         // store withholds Midnight/Custom instead of exposing a non-live theme.
         daemonCheck: async () => {
@@ -195,15 +206,18 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         onboardingProjectChoose: async () => undefined,
         onboardingChiefOfStaffComplete: async () => undefined,
         runtimeGet: async () => {
-            const snapshot = await request<DesktopRuntimeSnapshot>("runtimeGet");
+            const snapshot = await call<DesktopRuntimeSnapshot>("runtimeGet");
             if (snapshot.phase !== "ready" || snapshot.activeTarget.mode !== "local")
                 return snapshot;
             return {
                 ...snapshot,
                 activeTarget: {
                     ...snapshot.activeTarget,
+                    // The served prefix wins over the server's root-relative path.
                     happyAgentHttpUrl: new URL(
-                        snapshot.activeTarget.happyAgentHttpUrl,
+                        endpoint === defaultEndpoint
+                            ? snapshot.activeTarget.happyAgentHttpUrl
+                            : endpoint,
                         window.location.origin,
                     ).toString(),
                 },

@@ -1,0 +1,72 @@
+/*
+ * Orkest Chat embed (ORK-000015): GhostShell's clay tokens over Happy's palette,
+ * only while GhostShell frames this renderer (`html[data-orkest-embed]`). Values are
+ * the clay theme's (Ghost docs/reference/clay-style.md): monochrome, Satoshi, soft
+ * corners. The font file is the dashboard's own, on this same origin.
+ */
+@font-face {
+    font-family: "Orkest Satoshi";
+    src: url("/fonts/Satoshi-Variable.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 300 900;
+    font-display: swap;
+}
+
+html[data-orkest-embed] .happy-theme-scope,
+html[data-orkest-embed] .happy-theme-scope.happy-theme-light {
+    --happy-font-ui: "Orkest Satoshi", "Satoshi", "happy Figtree", system-ui, sans-serif;
+    --text: #171717;
+    --text-secondary: #595959;
+    --text-link: #171717;
+    --surface: #ffffff;
+    --surface-high: #f5f5f5;
+    --surface-highest: #eeeeee;
+    --surface-pressed: #eeeeee;
+    --surface-selected: #eeeeee;
+    --page-canvas: #f5f5f5;
+    --groupped-background: #f5f5f5;
+    --header-background: #ffffff;
+    --header-tint: #171717;
+    --divider: #e5e5e5;
+    --input-background: #f5f5f5;
+    --input-text: #171717;
+    --button-primary-background: #202020;
+    --button-primary-tint: #ffffff;
+    --switch-track-active: #202020;
+    --radio-active: #202020;
+    --radio-dot: #202020;
+    --composer-send-background: #202020;
+    --composer-send-icon: #ffffff;
+    color-scheme: light;
+}
+
+html[data-orkest-embed] .happy-theme-scope.happy-theme-dark {
+    --text: #f5f5f5;
+    --text-secondary: #a3a3a3;
+    --text-link: #f5f5f5;
+    --surface: #1a1a1a;
+    --surface-high: #202020;
+    --surface-highest: #262626;
+    --surface-pressed: #262626;
+    --surface-selected: #262626;
+    --page-canvas: #101010;
+    --groupped-background: #101010;
+    --header-background: #101010;
+    --header-tint: #f5f5f5;
+    --divider: #2a2a2a;
+    --input-background: #202020;
+    --input-text: #f5f5f5;
+    --button-primary-background: #ededed;
+    --button-primary-tint: #171717;
+    --switch-track-active: #ededed;
+    --radio-active: #ededed;
+    --radio-dot: #ededed;
+    --composer-send-background: #ededed;
+    --composer-send-icon: #171717;
+    color-scheme: dark;
+}
+
+html[data-orkest-embed],
+html[data-orkest-embed] body {
+    background: transparent;
+}

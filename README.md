@@ -1,3 +1,6 @@
+> **Orkest Chat** — this is Waremoto's fork of Happy Place, embedded in GhostShell as the Orkest Chat tab. See
+> [NOTICE](NOTICE) for credit and license; upstream is https://github.com/slopus/happy-desktop.
+
 <div align="center">
 
 <h1>Happy Engineering</h1>
