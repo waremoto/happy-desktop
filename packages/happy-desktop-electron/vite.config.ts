@@ -60,6 +60,10 @@ export default defineConfig({
     // ownership boundary explicit instead of silently replacing a refresh
     // runtime or reporting attribution that never attached.
     ...(profileBuild ? { server: { hmr: false } } : {}),
+    // Orkest Chat (ORK-000015): the GhostShell dashboard reaches `vite preview` from its container as
+    // host.docker.internal. With ORKEST_CHAT_KEY set every request must carry that key
+    // (browserDevServer.ts), which is the guard a Host allow-list stood in for, so any Host is accepted.
+    ...(process.env.ORKEST_CHAT_KEY ? { preview: { allowedHosts: true as const } } : {}),
     define: {
         __HAPPY_ALLOW_SOURCE_AGENT__: JSON.stringify(process.env.HAPPY_ALLOW_SOURCE_AGENT === "1"),
         __HAPPY_DESKTOP_PROFILE__: JSON.stringify(profileBuild),
