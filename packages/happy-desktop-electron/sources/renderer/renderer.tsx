@@ -129,6 +129,8 @@ import {
     orkestBridgeEndpoint,
     orkestEmbedEnabled,
     orkestEmbedThemeCreate,
+    orkestEmbedSidebarFollow,
+    orkestEmbedWelcomePersistence,
 } from "./orkestEmbed";
 import "./orkestEmbed.css";
 import { localWebBuild } from "./localWebBuild";
@@ -1377,7 +1379,9 @@ if (mediaPreviewBridge) {
         const runtimeStore = desktopRuntimeStoreCreate(desktopBridge);
         // Whether this machine's owner has been welcomed. Acknowledging this
         // deck enters machine setup; it does not wait for machine work to finish.
-        const welcome = welcomeStoreCreate(desktopWelcomePersistence());
+        const welcome = welcomeStoreCreate(
+            orkestEmbed ? orkestEmbedWelcomePersistence() : desktopWelcomePersistence(),
+        );
         // The local router outlives any single daemon connection, so it is created
         // here and the session store navigates through it when a conversation it
         // created should be opened.
@@ -1476,6 +1480,7 @@ if (mediaPreviewBridge) {
         // folded away. Also the window's own: switching machines does not
         // bring the sidebar back, and the rail beside it goes with it.
         const sidebarVisibility = happyAgentSidebarVisibilityStoreCreate();
+        if (orkestEmbed) orkestEmbedSidebarFollow(sidebarVisibility, window);
         // What the sidebar's search field holds. Transient like the command
         // palette below: a search is a question in progress, not a place to
         // come back to, so nothing is persisted.

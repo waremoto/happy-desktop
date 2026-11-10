@@ -8,6 +8,8 @@
  * browser-local renderer.
  */
 
+import type { WelcomePersistence } from "happy-desktop-state";
+
 const bridgeName = "__happy_local_happy_agent";
 const themeMessage = "orkest-chat:theme";
 
@@ -67,4 +69,38 @@ export function orkestEmbedThemeCreate(
             return () => listeners.delete(listener);
         },
     };
+}
+
+/**
+ * The welcome deck is Happy's first-run introduction. Inside GhostShell the
+ * person is already in Orkest, so the embed always reads as welcomed and never
+ * writes the desktop's own `happy.welcome.v1` record.
+ */
+export function orkestEmbedWelcomePersistence(): WelcomePersistence {
+    return {
+        read: () => ({ welcomeAcknowledged: true }),
+        write: () => undefined,
+    };
+}
+
+/** Below this frame width the conversation needs the whole frame (GhostShell's phone layout). */
+export const ORKEST_EMBED_NARROW_PX = 640;
+
+/**
+ * Inside GhostShell the frame can be phone-narrow. The sidebar starts folded
+ * there and folds or unfolds only when the frame crosses the breakpoint, so a
+ * person's own toggle in between is kept.
+ */
+export function orkestEmbedSidebarFollow(
+    store: { sidebarHiddenUpdate(hidden: boolean): void },
+    win: Pick<Window, "addEventListener" | "innerWidth">,
+): void {
+    let narrow = win.innerWidth < ORKEST_EMBED_NARROW_PX;
+    if (narrow) store.sidebarHiddenUpdate(true);
+    win.addEventListener("resize", () => {
+        const next = win.innerWidth < ORKEST_EMBED_NARROW_PX;
+        if (next === narrow) return;
+        narrow = next;
+        store.sidebarHiddenUpdate(next);
+    });
 }
