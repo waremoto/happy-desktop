@@ -2,6 +2,7 @@ import { useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import {
+    BrowserTerminalConnection,
     DesktopStartupScreen,
     appMobileRelayFromLink,
     appMobileRelayFromOnboarding,
@@ -135,6 +136,8 @@ import {
     orkestEmbedWelcomePersistence,
 } from "./orkestEmbed";
 import "./orkestEmbed.css";
+import { OrkestTicketTerminalConnection, orkestTerminalTicketEndpoint } from "./orkestTerminal";
+import { happyAgentTerminalOpenSet } from "./happyAgentHostServices";
 import { localWebBuild } from "./localWebBuild";
 import {
     localWebUpdateStoreCreate,
@@ -1235,6 +1238,18 @@ const orkestEmbed = browserLocal && orkestEmbedEnabled(document);
 if (orkestEmbed) document.documentElement.dataset.orkestEmbed = "1";
 // ORK-000016.4.1 — the agent is Orkest inside GhostShell; set before anything renders.
 if (orkestEmbed) orkestEmbedBrandApply();
+// ORK-000016.5.1 — a terminal socket first asks GhostShell for a one-time ticket over the gated HTTP path.
+if (orkestEmbed) {
+    happyAgentTerminalOpenSet(
+        (url, protocols) =>
+            new OrkestTicketTerminalConnection(url, protocols, {
+                endpoint: orkestTerminalTicketEndpoint(document.baseURI),
+                fetch: window.fetch.bind(window),
+                open: (socketUrl, offered) => new BrowserTerminalConnection(socketUrl, offered),
+                origin: window.location.origin,
+            }),
+    );
+}
 const orkestEmbedTheme = orkestEmbed
     ? orkestEmbedThemeCreate(window, () =>
           window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",

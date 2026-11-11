@@ -7,7 +7,18 @@ import type {
     HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
     HappyAgentWorkspaceFileBytes,
+    TerminalConnection,
 } from "happy-desktop-state";
+
+/** Opens one terminal socket. GhostShell's embed swaps in a ticket-first opener (orkestTerminal.ts, ORK-000016). */
+export type HappyAgentTerminalOpen = (url: string, protocols: readonly string[]) => TerminalConnection;
+const browserTerminalOpen: HappyAgentTerminalOpen = (url, protocols) => new BrowserTerminalConnection(url, protocols);
+let terminalOpen: HappyAgentTerminalOpen = browserTerminalOpen;
+
+/** Replaces how terminal sockets open; `undefined` restores the plain browser WebSocket. */
+export function happyAgentTerminalOpenSet(open: HappyAgentTerminalOpen | undefined): void {
+    terminalOpen = open ?? browserTerminalOpen;
+}
 
 /**
  * Where the application a project was last opened in is remembered. It holds the
@@ -303,7 +314,7 @@ export function happyAgentHostServicesCreate(
                 content,
             }),
         terminalConnect: (workspaceId, terminalId) =>
-            new BrowserTerminalConnection(
+            terminalOpen(
                 terminalSocketUrl(
                     agentUrl.replace(/\/$/u, ""),
                     `/v0/workspaces/${encodeURIComponent(workspaceId)}/terminals/${encodeURIComponent(terminalId)}/attach`,

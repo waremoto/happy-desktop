@@ -131,7 +131,7 @@ export function browserLocalHappyAgentPlugin(options: BrowserLocalHappyAgentOpti
         const terminals = happyAgentTerminalBridgeCreate({
             allowedOrigin: rendererOrigin,
             client: () => runtime().then(({ connection }) => connection.client),
-            expectedHost: () => expectedHost,
+            expectedHost: () => orkestTerminalExpectedHost(chatKey, expectedHost),
             prefix: endpoint,
         });
         server.httpServer?.on("upgrade", (request, socket, head) => {
@@ -305,4 +305,15 @@ async function bodyRead(request: IncomingMessage): Promise<string> {
 function json(response: ServerResponse, status: number, body: unknown): void {
     response.writeHead(status, { "content-type": "application/json" });
     response.end(JSON.stringify(body));
+}
+
+/**
+ * The Host the terminal bridge pins. Unkeyed, the bridge is a loopback dev
+ * server and keeps the DNS-rebinding guard. Keyed (ORK-000015), the shared key
+ * is the guard — unkeyed upgrades are destroyed before the bridge sees them —
+ * and the GhostShell container reaches it as host.docker.internal, a Host no
+ * WebSocket client can override (ORK-000016.5.1). The Origin check stays.
+ */
+export function orkestTerminalExpectedHost(key: string | undefined, host: string): string | undefined {
+    return key ? undefined : host;
 }
