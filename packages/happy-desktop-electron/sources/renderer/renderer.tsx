@@ -130,6 +130,8 @@ import {
     orkestEmbedEnabled,
     orkestEmbedThemeCreate,
     orkestEmbedSidebarFollow,
+    orkestEmbedBrandApply,
+    orkestEmbedStatusBarPersistence,
     orkestEmbedWelcomePersistence,
 } from "./orkestEmbed";
 import "./orkestEmbed.css";
@@ -1231,6 +1233,8 @@ const orkestTaskBoot = orkestTaskBootRead(
 // the prefix that served this document.
 const orkestEmbed = browserLocal && orkestEmbedEnabled(document);
 if (orkestEmbed) document.documentElement.dataset.orkestEmbed = "1";
+// ORK-000016.4.1 — the agent is Orkest inside GhostShell; set before anything renders.
+if (orkestEmbed) orkestEmbedBrandApply();
 const orkestEmbedTheme = orkestEmbed
     ? orkestEmbedThemeCreate(window, () =>
           window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
@@ -1512,7 +1516,9 @@ if (mediaPreviewBridge) {
             desktopStemCellAnimationPersistence(),
         );
         // Which optional controls the status bar shows: the window's own choice.
-        const statusBar = statusBarStoreCreate(desktopStatusBarPersistence());
+        const statusBar = statusBarStoreCreate(
+            orkestEmbed ? orkestEmbedStatusBarPersistence() : desktopStatusBarPersistence(),
+        );
         // Active-title motion is also this window's own choice. The store keeps
         // the product default in memory and writes only after the reader changes
         // the switch, so untouched installations follow future defaults.

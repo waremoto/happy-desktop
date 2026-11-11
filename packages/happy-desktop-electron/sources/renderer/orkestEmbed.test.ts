@@ -1,6 +1,16 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
+    agentAuthor,
+    productAgentName,
+    productAgentNameSet,
+    productBotDisplayName,
+    statusBarStoreCreate,
+} from "happy-desktop-state";
+import {
     orkestBridgeEndpoint,
+    orkestEmbedBrandApply,
+    orkestEmbedStatusBarPersistence,
     orkestEmbedThemeCreate,
     orkestEmbedSidebarFollow,
     orkestEmbedWelcomePersistence,
@@ -98,5 +108,46 @@ describe("orkestEmbedSidebarFollow", () => {
         win.resize(1200);
         expect(store.sidebarHiddenUpdate).toHaveBeenLastCalledWith(false);
         expect(store.sidebarHiddenUpdate).toHaveBeenCalledTimes(2);
+    });
+});
+
+// ORK-000016.4.1: inside GhostShell the agent is Orkest and GhostShell owns the theme.
+describe("orkestEmbedBrandApply", () => {
+    it("names the agent Orkest in copy, and shows the daemon's built-in bot under that name", () => {
+        expect(productAgentName()).toBe("Happy");
+        try {
+            orkestEmbedBrandApply();
+            expect(productAgentName()).toBe("Orkest");
+            expect(agentAuthor.displayName).toBe("Orkest");
+            expect(productBotDisplayName("Happy", "chief_of_staff")).toBe("Orkest");
+            // Other bots, and a built-in bot its owner renamed, keep their names.
+            expect(productBotDisplayName("Happy")).toBe("Happy");
+            expect(productBotDisplayName("Ops", "chief_of_staff")).toBe("Ops");
+        } finally {
+            productAgentNameSet("");
+        }
+        expect(agentAuthor.displayName).toBe("Happy");
+    });
+});
+
+describe("orkestEmbedStatusBarPersistence", () => {
+    it("hides the theme menu and never writes the desktop's record", () => {
+        const persistence = orkestEmbedStatusBarPersistence();
+        const write = vi.spyOn(persistence, "write");
+        const store = statusBarStoreCreate(persistence);
+        expect(store.get().themeShown).toBe(false);
+        expect(store.get().keepAwakeShown).toBe(false);
+        store.keepAwakeShownUpdate(true);
+        expect(write).toHaveBeenCalled();
+        expect(persistence.read()).toEqual({ themeShown: false, keepAwakeShown: false });
+    });
+
+    it("is what the renderer uses, with the brand, only when embedded", () => {
+        const renderer = readFileSync(new URL("./renderer.tsx", import.meta.url), "utf8");
+        expect(renderer).toMatch(/orkestEmbed \? orkestEmbedStatusBarPersistence\(\) : desktopStatusBarPersistence\(\)/);
+        expect(renderer).toMatch(/if \(orkestEmbed\) orkestEmbedBrandApply\(\)/);
+        const app = readFileSync(new URL("../../../happy-desktop-app/sources/AppHappyAgentView.tsx", import.meta.url), "utf8");
+        expect(app).not.toMatch(/"Message Happy/);
+        expect(app).toMatch(/const agent = productAgentName\(\);/);
     });
 });

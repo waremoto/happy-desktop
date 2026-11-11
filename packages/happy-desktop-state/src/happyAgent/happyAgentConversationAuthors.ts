@@ -1,6 +1,7 @@
 import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { HappyAgentSessionSummary } from "./happyAgentTypes.js";
+import { productAgentName } from "../productBrand.js";
 
 /** Stable identity of the machine owner. */
 export const happyAgentOwnerAuthor: ConversationAuthor = {
@@ -18,10 +19,15 @@ export const happyAgentInboundAuthor: ConversationAuthor = {
     kind: "human",
 };
 
-/** Stable identity of the agent running the conversation. */
+/**
+ * Stable identity of the agent running the conversation. Its display name is
+ * the product's agent name (productBrand.ts), read when shown.
+ */
 export const agentAuthor: ConversationAuthor = {
     id: "happy-agent:agent",
-    displayName: "Happy",
+    get displayName() {
+        return productAgentName();
+    },
     username: "happy",
     kind: "agent",
     agentRole: "default",

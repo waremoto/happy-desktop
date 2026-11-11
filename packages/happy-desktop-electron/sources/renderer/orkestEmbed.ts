@@ -8,7 +8,11 @@
  * browser-local renderer.
  */
 
-import type { WelcomePersistence } from "happy-desktop-state";
+import {
+    productAgentNameSet,
+    type StatusBarPersistence,
+    type WelcomePersistence,
+} from "happy-desktop-state";
 
 const bridgeName = "__happy_local_happy_agent";
 const themeMessage = "orkest-chat:theme";
@@ -103,4 +107,26 @@ export function orkestEmbedSidebarFollow(
         narrow = next;
         store.sidebarHiddenUpdate(next);
     });
+}
+
+
+/**
+ * ORK-000016.4.1 — inside GhostShell the agent is Orkest: its name on replies,
+ * the composer's "Message Orkest…" and the built-in bot's row. The daemon's own
+ * data (the bot stored as "Happy", the folders it names) is left as it is.
+ */
+export function orkestEmbedBrandApply(): void {
+    productAgentNameSet("Orkest");
+}
+
+/**
+ * GhostShell owns the colour mode (its header menu), so the embed's status bar
+ * never shows Happy's theme menu. Like the welcome record, the desktop's own
+ * status-bar record is neither read nor written from the embed.
+ */
+export function orkestEmbedStatusBarPersistence(): StatusBarPersistence {
+    return {
+        read: () => ({ themeShown: false, keepAwakeShown: false }),
+        write: () => undefined,
+    };
 }

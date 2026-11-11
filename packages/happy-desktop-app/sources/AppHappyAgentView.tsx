@@ -159,6 +159,7 @@ import {
     HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL,
     HAPPY_AGENT_PANEL_FILE_VIEW_ID,
     agentAuthor,
+    productAgentName,
     happyAgentChangeTiersAssign,
     happyAgentArtifactAuthorLabel,
     happyAgentArtifactCatalogStoreNoop,
@@ -2137,7 +2138,8 @@ function openGroupFind(
 const MODELS_NOT_CONFIGURED_NOTE = "Sign in to at least one AI to start chatting.";
 
 function composerPlaceholder(groupName: string | undefined): string {
-    return groupName === undefined ? "Message Happy…" : `Message Happy in “${groupName}”…`;
+    const agent = productAgentName();
+    return groupName === undefined ? `Message ${agent}…` : `Message ${agent} in “${groupName}”…`;
 }
 
 /**
@@ -8183,11 +8185,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     openBot.conversation.id === conversation.value.conversationId ? (
                         <EmptyState
                             animation="chief-of-staff"
-                            description="This bot has elevated permissions to configure Happy around your needs. Tell it how you want Happy to work for you."
+                            description={`This bot has elevated permissions to configure ${productAgentName()} around your needs. Tell it how you want ${productAgentName()} to work for you.`}
                             emphasis="prominent"
                             icon="shield"
                             size="panel"
-                            title="Happy"
+                            title={productAgentName()}
                         />
                     ) : undefined
                 }

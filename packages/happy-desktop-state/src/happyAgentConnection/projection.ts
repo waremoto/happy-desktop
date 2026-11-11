@@ -1,3 +1,4 @@
+import { productBotDisplayName } from "../productBrand.js";
 import { chatActionSegments } from "../chatActions/chatActionBlocks.js";
 import { happyAgentActionChoicesRead } from "../chatActions/chatActionChoices.js";
 import { chatActionPressRead, chatActionPressText } from "../chatActions/chatActionPressText.js";
@@ -611,7 +612,7 @@ export function projectBots(
             return {
                 id: bot.id,
                 workspaceId: bot.workspaceId,
-                name: bot.name,
+                name: productBotDisplayName(bot.name, bot.systemKey),
                 username: bot.username,
                 ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
                 orderKey: bot.orderKey,
