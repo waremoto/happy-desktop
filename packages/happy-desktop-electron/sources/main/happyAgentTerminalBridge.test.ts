@@ -35,7 +35,11 @@ afterEach(async () => {
 });
 
 async function fixtureCreate(
-    options: { readonly capability?: string; readonly expectedHost?: boolean } = {
+    options: {
+        readonly capability?: string;
+        readonly expectedHost?: boolean;
+        readonly unpinnedHost?: boolean;
+    } = {
         capability,
         expectedHost: true,
     },
@@ -47,6 +51,7 @@ async function fixtureCreate(
         allowedOrigin: "http://127.0.0.1:5174",
         client: () => Promise.resolve({ attachTerminal }),
         ...(options.expectedHost ? { expectedHost: () => host } : {}),
+        ...(options.unpinnedHost ? { expectedHost: () => undefined } : {}),
     });
     const server = createServer();
     server.on("upgrade", (request, socket, head) => bridge.upgrade(request, socket, head));
@@ -114,6 +119,18 @@ describe("happyAgentTerminalBridge", () => {
             connect(fixture, { host: "attacker.example", origin: "http://attacker.example" }),
         ).rejects.toMatchObject({ statusCode: 403 });
         expect(fixture.attachTerminal).not.toHaveBeenCalled();
+    });
+
+    it("attaches under any Host when the host is unpinned (a keyed Orkest bridge)", async () => {
+        const fixture = await fixtureCreate({ unpinnedHost: true });
+
+        const socket = await connect(fixture, {
+            host: "host.docker.internal:5320",
+            origin: "http://127.0.0.1:5174",
+        });
+
+        expect(fixture.attachTerminal).toHaveBeenCalledTimes(1);
+        socket.close();
     });
 
     it("attaches and reconnects with the packaged renderer capability", async () => {

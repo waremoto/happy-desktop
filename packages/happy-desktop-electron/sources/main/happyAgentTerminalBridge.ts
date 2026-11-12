@@ -84,9 +84,11 @@ export function happyAgentTerminalBridgeCreate(
             const claim = terminalClaim(prefix, request.url);
             if (!claim) return false;
             const protocols = protocolsOf(request.headers["sec-websocket-protocol"]);
+            // An `expectedHost` that answers `undefined` is an unpinned host (a keyed Orkest bridge, whose
+            // key is the guard); only a string pins. Comparing against `undefined` rejected every upgrade.
+            const pinnedHost = options.expectedHost?.();
             if (
-                (options.expectedHost !== undefined &&
-                    request.headers.host !== options.expectedHost()) ||
+                (pinnedHost !== undefined && request.headers.host !== pinnedHost) ||
                 !originAllowed(
                     request.headers.origin,
                     options.allowedOrigin,
