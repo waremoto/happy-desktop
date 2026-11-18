@@ -1,3 +1,4 @@
+import { OrkestConversationApproval } from "./OrkestConversationApproval";
 import type { ChatActionChoice, ChatActionInvocation } from "happy-desktop-state";
 import { type CSSProperties, type ReactNode, useRef, useState, useSyncExternalStore } from "react";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
@@ -1381,6 +1382,9 @@ export function ConversationView(props: ConversationViewProps) {
                 </MarkdownLayoutCacheContext.Provider>
             )}
 
+            {props.conversationId && !props.panel && !props.loading ? (
+                <OrkestConversationApproval conversationId={props.conversationId} />
+            ) : null}
             {props.dock}
 
             {props.overlay ? <WindowOverlay>{props.overlay}</WindowOverlay> : null}

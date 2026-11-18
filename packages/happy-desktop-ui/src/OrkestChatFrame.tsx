@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { OrkestApprovalTask } from "./OrkestConversationApproval";
 import "./styles/orkest-chat-frame.css";
 
 export type OrkestChatFrameProps = {
@@ -7,7 +8,7 @@ export type OrkestChatFrameProps = {
     /** The configured Board address. Missing or unsafe addresses are omitted. */
     readonly boardUrl?: string;
     /** The exact native Happy task for the currently routed conversation. */
-    readonly linkedWorkTask?: { readonly id: string; readonly name: string };
+    readonly linkedWorkTask?: { readonly id: string; readonly name: string; readonly conversationId?: string };
     /** The configured global Dossiers index address. It is not a work-item association. */
     readonly dossierUrl?: string;
     /** Truthful state while an explicit native task deep link is resolved. */
@@ -127,7 +128,11 @@ export function OrkestChatFrame(props: OrkestChatFrameProps) {
                     </p>
                 ) : null}
                 <div className="orkest-chat-frame__body">
-                    <div className="orkest-chat-frame__content">{props.children}</div>
+                    <div className="orkest-chat-frame__content">
+                        <OrkestApprovalTask.Provider value={taskHandoffMessage ? undefined : props.linkedWorkTask}>
+                            {props.children}
+                        </OrkestApprovalTask.Provider>
+                    </div>
                 </div>
             </div>
         );

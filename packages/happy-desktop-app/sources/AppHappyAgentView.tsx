@@ -5321,7 +5321,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 {...(props.orkestBoardUrl === undefined ? {} : { boardUrl: props.orkestBoardUrl })}
                 {...(linkedWorkTask === undefined
                     ? {}
-                    : { linkedWorkTask: { id: linkedWorkTask.id, name: linkedWorkTask.name } })}
+                    : { linkedWorkTask: { id: linkedWorkTask.id, name: linkedWorkTask.name, conversationId: linkedWorkTask.conversation.id } })}
                 {...(props.orkestDossierUrl === undefined
                     ? {}
                     : { dossierUrl: props.orkestDossierUrl })}

@@ -305,3 +305,14 @@
         padding: 16px;
     }
 }
+
+/* The embedded card sizes to its content and leaves the transcript and composer reachable. */
+.orkest-conversation-approval {
+    align-self: center;
+    flex: 0 1 auto;
+    width: min(100%, var(--happy-chat-measure));
+    height: 0;
+    max-height: 40%;
+    border: 0;
+    visibility: hidden;
+}
