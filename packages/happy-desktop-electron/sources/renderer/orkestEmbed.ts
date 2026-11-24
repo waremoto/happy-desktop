@@ -130,3 +130,53 @@ export function orkestEmbedStatusBarPersistence(): StatusBarPersistence {
         write: () => undefined,
     };
 }
+
+const scrollMessage = "orkest-chat:scroll-to";
+const TURN_ID = /^[A-Za-z0-9._:-]{1,100}$/;
+
+/** Where the conversation should land for a turn: that message's row, at its top (MessageList's restore input). */
+export interface OrkestEmbedScrollRow {
+    readonly type: "row";
+    readonly rowKey: string;
+    readonly offset: number;
+}
+
+export function orkestEmbedScrollRow(turn: string): OrkestEmbedScrollRow {
+    return { type: "row", rowKey: turn, offset: 0 };
+}
+
+export interface OrkestEmbedScrollSource {
+    /** The last turn GhostShell asked for, until it is taken. */
+    take(): string | undefined;
+    subscribe(listener: (turn: string) => void): () => void;
+}
+
+/**
+ * GHO-205.5.3 (Orkest design D-52) — GhostShell's "Show previous" on a doc change asks the chat to scroll to the turn
+ * that made it: `{ type: "orkest-chat:scroll-to", turn }` from the framing GhostShell page on this same origin. Only
+ * the parent window is heard and only a well-formed message id passes; the listener gets the turn, and the turn stays
+ * pending (`take`) for a conversation that opens after the message arrived.
+ */
+export function orkestEmbedScrollCreate(win: EmbedWindow): OrkestEmbedScrollSource {
+    let pending: string | undefined;
+    const listeners = new Set<(turn: string) => void>();
+    win.addEventListener("message", (event: MessageEvent) => {
+        if (event.origin !== win.location.origin || event.source !== win.parent) return;
+        const data = event.data as { type?: unknown; turn?: unknown } | null;
+        if (!data || data.type !== scrollMessage) return;
+        if (typeof data.turn !== "string" || !TURN_ID.test(data.turn)) return;
+        pending = data.turn;
+        for (const listener of listeners) listener(data.turn);
+    });
+    return {
+        take() {
+            const turn = pending;
+            pending = undefined;
+            return turn;
+        },
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+    };
+}

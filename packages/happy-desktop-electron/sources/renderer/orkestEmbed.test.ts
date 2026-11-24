@@ -151,3 +151,25 @@ describe("orkestEmbedStatusBarPersistence", () => {
         expect(app).toMatch(/const agent = productAgentName\(\);/);
     });
 });
+
+// GHO-205.5.3: "Show previous" on a doc change scrolls the framed chat to the turn that made it.
+describe("orkestEmbedScrollCreate", () => {
+    it("hears a well-formed turn from the same-origin parent only, and keeps it until taken", async () => {
+        const { orkestEmbedScrollCreate, orkestEmbedScrollRow } = await import("./orkestEmbed");
+        const win = fakeWindow("");
+        const scroll = orkestEmbedScrollCreate(win as never);
+        const listener = vi.fn();
+        scroll.subscribe(listener);
+        win.dispatch({ type: "orkest-chat:scroll-to", turn: "turn-7" }, "https://evil.example");
+        win.dispatch({ type: "orkest-chat:scroll-to", turn: "turn-7" }, "https://ghost.ware.cl", {});
+        win.dispatch({ type: "orkest-chat:scroll-to", turn: "has space" });
+        win.dispatch({ type: "orkest-chat:scroll-to", turn: 7 });
+        expect(listener).not.toHaveBeenCalled();
+        expect(scroll.take()).toBeUndefined();
+        win.dispatch({ type: "orkest-chat:scroll-to", turn: "turn-7" });
+        expect(listener).toHaveBeenCalledWith("turn-7");
+        expect(scroll.take()).toBe("turn-7");
+        expect(scroll.take()).toBeUndefined();
+        expect(orkestEmbedScrollRow("turn-7")).toEqual({ type: "row", rowKey: "turn-7", offset: 0 });
+    });
+});
