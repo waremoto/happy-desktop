@@ -793,6 +793,11 @@ export interface HappyAgentChatStore {
     /** Begins a new visit with every completed turn folded, including manually opened turns. */
     turnTracesFold(): void;
     /**
+     * The transcript's tool calls with the run each belongs to, loaded rows only. A folded turn's calls have no row
+     * of their own, so this is how a call id finds the turn that holds it.
+     */
+    toolCallRuns(): readonly { readonly toolCallId: string; readonly runId: string }[];
+    /**
      * Tells which of the turns left open because the reader watched them
      * finish one view of this chat has on screen. Each such turn folds once no
      * view showing the chat has any of it on screen; a turn the reader opened
@@ -1797,6 +1802,13 @@ export function happyAgentChatStoreCreate(
         reasoningToggle() {
             showReasoning = !showReasoning;
             commit();
+        },
+        toolCallRuns() {
+            return (transcriptElements ?? []).flatMap((element) =>
+                element.kind === "tool_call"
+                    ? [{ toolCallId: element.toolCallId, runId: element.runId }]
+                    : [],
+            );
         },
         turnTracesFold() {
             // The tail-follow cache does not include older turns loaded later.

@@ -12,7 +12,9 @@ import {
 import {
     orkestBridgeEndpoint,
     orkestEmbedBrandApply,
+    orkestEmbedChatFollow,
     orkestEmbedModelCreate,
+    orkestEmbedScrollCreate,
     orkestEmbedModelFor,
     orkestEmbedScrollRow,
     orkestEmbedScrollRowKey,
@@ -372,5 +374,95 @@ describe("orkestEmbedModelFor", () => {
         expect(orkestEmbedModelFor("opus", catalog, "claude-sonnet-only")).toBeUndefined();
         expect(orkestEmbedModelFor("haiku", catalog, "missing")).toBeUndefined();
         expect(orkestEmbedModelFor("opus", { providers: [] }, "claude-main")).toBeUndefined();
+    });
+});
+
+// GHO-205.7.2: the renderer's wiring, over a workspace that opens one conversation.
+describe("orkestEmbedChatFollow", () => {
+    function workspaceFake() {
+        const listeners = new Set<() => void>();
+        let conversation: unknown = { type: "loading" };
+        const workspace = {
+            get: () => ({ conversation }),
+            subscribe(listener: () => void) {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            },
+            conversationScrollJump: vi.fn(),
+            conversationToolCallRuns: vi.fn(() => [{ toolCallId: TURN, runId: "run-1" }]),
+            sessionModelUpdate: vi.fn(),
+        };
+        return {
+            workspace,
+            open(value: Record<string, unknown>) {
+                conversation = { type: "ready", value: { ready: true, ...value } };
+                for (const listener of listeners) listener();
+            },
+        };
+    }
+    const menus = {
+        currentProviderId: "claude-main",
+        currentModelId: "anthropic/sonnet-5-5",
+        modelOptions: [
+            { providerId: "codex-main", modelId: "openai/opus-lookalike", disabled: false },
+            { providerId: "claude-main", modelId: "anthropic/opus-5-5", disabled: false },
+            { providerId: "claude-main", modelId: "anthropic/sonnet-5-5", disabled: false },
+            { providerId: "claude-main", modelId: "anthropic/opus-4-7", disabled: false },
+        ],
+    };
+    function follow() {
+        const win = fakeWindow("");
+        const fake = workspaceFake();
+        const stop = orkestEmbedChatFollow({
+            scroll: orkestEmbedScrollCreate(win as never),
+            model: orkestEmbedModelCreate(win as never),
+            workspace: { get: () => fake.workspace as never, subscribe: () => () => undefined },
+        });
+        return { win, ...fake, stop };
+    }
+    const rows = [userRow("u1"), agentRow("message:m1:3", "run-1", { traceFoldAnchorId: "run-1" })];
+
+    it("lands the open conversation on the turn's row now", () => {
+        const chat = follow();
+        chat.open({ conversationId: "s1", entries: rows });
+        chat.win.dispatch({ type: "orkest-chat:scroll-to", turn: TURN });
+        expect(chat.workspace.conversationScrollJump).toHaveBeenCalledWith("s1", orkestEmbedScrollRow("message:m1:3"));
+        chat.stop();
+    });
+
+    it("keeps a turn that came first for the conversation that opens, once", () => {
+        const chat = follow();
+        chat.win.dispatch({ type: "orkest-chat:scroll-to", turn: TURN });
+        expect(chat.workspace.conversationScrollJump).not.toHaveBeenCalled();
+        chat.open({ conversationId: "s1", standIn: true, entries: rows });
+        expect(chat.workspace.conversationScrollJump).not.toHaveBeenCalled();
+        chat.open({ conversationId: "s1", entries: rows });
+        chat.open({ conversationId: "s1", entries: rows });
+        expect(chat.workspace.conversationScrollJump).toHaveBeenCalledOnce();
+        chat.stop();
+    });
+
+    it("leaves the chat as it is for a turn with no row", () => {
+        const chat = follow();
+        chat.open({ conversationId: "s1", entries: [userRow("u1")] });
+        chat.win.dispatch({ type: "orkest-chat:scroll-to", turn: "unknown-turn" });
+        expect(chat.workspace.conversationScrollJump).not.toHaveBeenCalled();
+        chat.stop();
+    });
+
+    it("switches the open conversation to its provider's newest model for the lane, and only when it changes", () => {
+        const chat = follow();
+        chat.win.dispatch({ type: "orkest-chat:model", lane: "opus" });
+        expect(chat.workspace.sessionModelUpdate).not.toHaveBeenCalled();
+        chat.open({ conversationId: "s1", entries: [], menus });
+        chat.win.dispatch({ type: "orkest-chat:model", lane: "sonnet" });
+        chat.win.dispatch({ type: "orkest-chat:model", lane: "haiku" });
+        expect(chat.workspace.sessionModelUpdate).not.toHaveBeenCalled();
+        chat.win.dispatch({ type: "orkest-chat:model", lane: "opus" });
+        expect(chat.workspace.sessionModelUpdate).toHaveBeenCalledWith({
+            providerId: "claude-main",
+            modelId: "anthropic/opus-5-5",
+        });
+        chat.stop();
     });
 });

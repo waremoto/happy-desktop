@@ -246,3 +246,15 @@ it("keeps a steered turn open, and a turn the reader opened stays open off scree
     chat.store.turnTraceToggle("live");
     expect(chat.store.get().expandedTurnIds.size).toBe(0);
 });
+
+// GHO-205.7.2: a folded turn's tool call has no row, so its id finds the turn through the call's run.
+it("names each loaded tool call's run, folded or not", () => {
+    using chat = storeOpen();
+    expect(chat.store.toolCallRuns()).toEqual([]);
+    chat.change([...turn("old", 1_000), end("old", 1_100), ...turn("live", 2_000)]);
+    expect(rows(chat.store)).not.toContain("old:tool");
+    expect(chat.store.toolCallRuns()).toEqual([
+        { toolCallId: "old:call", runId: "run-old" },
+        { toolCallId: "live:call", runId: "run-live" },
+    ]);
+});

@@ -330,6 +330,11 @@ export interface HappyAgentConversationSnapshot {
      */
     readonly scrollPosition?: HappyAgentScrollPosition;
     /**
+     * Bumped each time `conversationScrollJump` moves this conversation: the transcript reads its position once, on
+     * mount, so a view keys its list on this to land on the new place. Absent until the first jump.
+     */
+    readonly scrollGeneration?: number;
+    /**
      * Published as the conversation was left, standing in until it is read
      * back. Whatever it received while out of sight is not in it yet, so a
      * view kept for it waits for the read rather than showing it and then
@@ -2178,6 +2183,17 @@ export interface HappyAgentWorkspaceStore {
         conversationId: HappyAgentSessionId,
         position: HappyAgentScrollPosition,
     ): void;
+    /**
+     * Moves one conversation's reader to `position`: unlike `conversationScrollUpdate`, which only records where the
+     * reader already is, this republishes with a new `scrollGeneration`, so an open transcript lands there now and a
+     * closed one lands there when it opens.
+     */
+    conversationScrollJump(
+        conversationId: HappyAgentSessionId,
+        position: HappyAgentScrollPosition,
+    ): void;
+    /** The open conversation's tool calls and their runs; see `HappyAgentChatStore.toolCallRuns`. */
+    conversationToolCallRuns(): readonly { readonly toolCallId: string; readonly runId: string }[];
     [Symbol.dispose](): void;
 }
 
@@ -2667,6 +2683,8 @@ export function happyAgentWorkspaceStoreCreate(
      * conversation is opened again.
      */
     let scrollPositions: ReadonlyMap<HappyAgentSessionId, HappyAgentScrollPosition> = new Map();
+    /** How many times each conversation was moved by `conversationScrollJump`. */
+    let scrollGenerations: ReadonlyMap<HappyAgentSessionId, number> = new Map();
     let fileTabs: readonly HappyAgentFileTabSnapshot[] = [];
     let activeMainViewId: string | undefined;
     /** The selected view whose complete pixels are currently on screen. */
@@ -3042,6 +3060,9 @@ export function happyAgentWorkspaceStoreCreate(
             failureSwitchSupported: chat.failureSwitchSupported,
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }
+                : {}),
+            ...(scrollGenerations.has(chat.sessionId)
+                ? { scrollGeneration: scrollGenerations.get(chat.sessionId)! }
                 : {}),
         };
     };
@@ -8813,6 +8834,16 @@ export function happyAgentWorkspaceStoreCreate(
                 scrollPositions = new Map(scrollPositions).set(conversationId, position);
             if (conversationId === openId) chatStore?.historyFollowingSet(position.type !== "row");
         },
+        conversationScrollJump(conversationId, position) {
+            scrollPositions = new Map(scrollPositions).set(conversationId, position);
+            scrollGenerations = new Map(scrollGenerations).set(
+                conversationId,
+                (scrollGenerations.get(conversationId) ?? 0) + 1,
+            );
+            if (conversationId === openId) chatStore?.historyFollowingSet(position.type !== "row");
+            recompute();
+        },
+        conversationToolCallRuns: () => chatStore?.toolCallRuns() ?? [],
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;

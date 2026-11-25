@@ -10560,6 +10560,9 @@ function HappyAgentConversationSurface(props: {
             loading={!conversation.ready}
             {...(props.notice === undefined ? {} : { notice: props.notice })}
             scrollPosition={conversation.scrollPosition}
+            {...(conversation.scrollGeneration === undefined
+                ? {}
+                : { scrollGeneration: conversation.scrollGeneration })}
             onScrollPositionChange={(position) => {
                 workspace.conversationScrollUpdate(
                     conversation.conversationId as HappyAgentSessionId,

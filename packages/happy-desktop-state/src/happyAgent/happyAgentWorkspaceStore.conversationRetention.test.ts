@@ -421,3 +421,39 @@ it("publishes nothing for a draft keystroke after the transcript reports the sam
     unsubscribe();
     view.unsubscribe();
 });
+
+// GHO-205.7.2: GhostShell's "Show previous" moves the reader; an open list remounts on the generation to land there.
+it("moves a conversation's reader now when it is open, and when it opens otherwise", async () => {
+    const view = workspaceCreate({ count: 2, size: 1_000 });
+    await view.open("a");
+    const position = { type: "row" as const, rowKey: "a:1", offset: 0, viewportInset: 1_000_000 };
+    const before = view.workspace.get();
+    view.workspace.conversationScrollJump("a" as HappyAgentSessionId, position);
+    let shown = view.workspace.get().conversation;
+    expect(view.workspace.get()).not.toBe(before);
+    expect(shown.type === "ready" && shown.value.scrollPosition).toEqual(position);
+    expect(shown.type === "ready" && shown.value.scrollGeneration).toBe(1);
+    view.workspace.conversationScrollJump("a" as HappyAgentSessionId, position);
+    shown = view.workspace.get().conversation;
+    expect(shown.type === "ready" && shown.value.scrollGeneration).toBe(2);
+
+    const later = { type: "row" as const, rowKey: "b:1", offset: 0, viewportInset: 1_000_000 };
+    view.workspace.conversationScrollJump("b" as HappyAgentSessionId, later);
+    shown = view.workspace.get().conversation;
+    expect(shown.type === "ready" && shown.value.conversationId).toBe("a");
+    await view.open("b");
+    shown = view.workspace.get().conversation;
+    expect(shown.type === "ready" && shown.value.scrollPosition).toEqual(later);
+    expect(shown.type === "ready" && shown.value.scrollGeneration).toBe(1);
+    view.unsubscribe();
+});
+
+it("records the reader's own scrolling without a generation", async () => {
+    const view = workspaceCreate({ count: 1, size: 1_000 });
+    await view.open("a");
+    view.workspace.conversationScrollUpdate("a" as HappyAgentSessionId, { type: "row", rowKey: "a:1", offset: 4 });
+    view.chats.get("a")!.draft("x", 3_000);
+    const shown = view.workspace.get().conversation;
+    expect(shown.type === "ready" && shown.value.scrollGeneration).toBeUndefined();
+    view.unsubscribe();
+});

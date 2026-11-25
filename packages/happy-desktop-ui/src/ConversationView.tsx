@@ -230,6 +230,11 @@ export type ConversationViewProps = {
      * means the newest content, which is where a conversation opens.
      */
     scrollPosition?: MessageListScrollPosition | MessageListLegacyScrollPosition;
+    /**
+     * Changes when something other than the reader moved `scrollPosition` (GhostShell's "Show previous"): the list
+     * reads its position only on mount, so a new generation mounts it again there. Absent keeps one list per conversation.
+     */
+    scrollGeneration?: number;
     /** Reports the reading position, including the final one before unmount. */
     onScrollPositionChange?: (position: MessageListScrollPosition) => void;
     /**
@@ -1219,7 +1224,11 @@ export function ConversationView(props: ConversationViewProps) {
                         // The conversation is this list's lifetime: switching to
                         // another one mounts its own list, which is what lets each
                         // restore its own position instead of inheriting one.
-                        key={props.conversationId}
+                        key={
+                            props.scrollGeneration === undefined
+                                ? props.conversationId
+                                : `${props.conversationId ?? ""}#${String(props.scrollGeneration)}`
+                        }
                         onScrollPositionChange={props.onScrollPositionChange}
                         onStartReached={props.onStartReached}
                         {...(props.onTracesSeen

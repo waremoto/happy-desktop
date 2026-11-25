@@ -128,7 +128,10 @@ import { browserDevBridgeCreate } from "./browserDevBridge";
 import { orkestTaskBootRead } from "./orkestTaskBoot";
 import {
     orkestBridgeEndpoint,
+    orkestEmbedChatFollow,
     orkestEmbedEnabled,
+    orkestEmbedModelCreate,
+    orkestEmbedScrollCreate,
     orkestEmbedThemeCreate,
     orkestEmbedSidebarFollow,
     orkestEmbedBrandApply,
@@ -1778,6 +1781,23 @@ if (mediaPreviewBridge) {
         const localSession = () =>
             happyAgents.get().happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
                 ?.session;
+        // GHO-205.7.2 — GhostShell's "Show previous" scrolls the open chat to a turn, and its model picker switches it.
+        if (orkestEmbed)
+            appDisposers.push(
+                orkestEmbedChatFollow({
+                    scroll: orkestEmbedScrollCreate(window),
+                    model: orkestEmbedModelCreate(window),
+                    workspace: {
+                        get: () => {
+                            const directory = happyAgents.get();
+                            const id = directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+                            return directory.happyAgents.find((entry) => entry.id === id)?.session
+                                ?.workspace;
+                        },
+                        subscribe: happyAgents.subscribe,
+                    },
+                }),
+            );
         /* Once first run is over, or this Happy Agent does not run it, the window is ordinary. */
         function happyOnboardingFinish(): void {
             chatOnboardingDone = true;
