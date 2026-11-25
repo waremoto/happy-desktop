@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
+    type ConversationEntry,
+    type HappyAgentModelCatalog,
     agentAuthor,
     productAgentName,
     productAgentNameSet,
@@ -10,6 +12,11 @@ import {
 import {
     orkestBridgeEndpoint,
     orkestEmbedBrandApply,
+    orkestEmbedModelCreate,
+    orkestEmbedModelFor,
+    orkestEmbedScrollRow,
+    orkestEmbedScrollRowKey,
+    orkestEmbedScrollTarget,
     orkestEmbedStatusBarPersistence,
     orkestEmbedThemeCreate,
     orkestEmbedSidebarFollow,
@@ -155,7 +162,7 @@ describe("orkestEmbedStatusBarPersistence", () => {
 // GHO-205.5.3: "Show previous" on a doc change scrolls the framed chat to the turn that made it.
 describe("orkestEmbedScrollCreate", () => {
     it("hears a well-formed turn from the same-origin parent only, and keeps it until taken", async () => {
-        const { orkestEmbedScrollCreate, orkestEmbedScrollRow } = await import("./orkestEmbed");
+        const { orkestEmbedScrollCreate } = await import("./orkestEmbed");
         const win = fakeWindow("");
         const scroll = orkestEmbedScrollCreate(win as never);
         const listener = vi.fn();
@@ -170,6 +177,200 @@ describe("orkestEmbedScrollCreate", () => {
         expect(listener).toHaveBeenCalledWith("turn-7");
         expect(scroll.take()).toBe("turn-7");
         expect(scroll.take()).toBeUndefined();
-        expect(orkestEmbedScrollRow("turn-7")).toEqual({ type: "row", rowKey: "turn-7", offset: 0 });
+    });
+});
+
+// GHO-205.7.2: the turn GhostShell sends is the transcript's `propose_document` tool call id.
+const TURN = "k3v9q2m7x1c8d4f6h0j5";
+
+function userRow(id: string): ConversationEntry {
+    return {
+        kind: "message",
+        message: { id, sender: { kind: "user" } },
+        source: "server",
+        delivery: "sent",
+    } as unknown as ConversationEntry;
+}
+
+function agentRow(id: string, runId: string, extra: Record<string, unknown> = {}): ConversationEntry {
+    return {
+        kind: "message",
+        message: { id, sender: { kind: "agent" } },
+        source: "server",
+        delivery: "sent",
+        runId,
+        ...extra,
+    } as unknown as ConversationEntry;
+}
+
+function toolRow(id: string, toolCallId: string): ConversationEntry {
+    return {
+        kind: "agentActivity",
+        id,
+        sequence: id,
+        activity: { kind: "tool", tool: { toolCallId, toolName: "propose_document" } },
+    } as unknown as ConversationEntry;
+}
+
+function statusRow(id: string, runId: string): ConversationEntry {
+    return { kind: "turnStatus", id, runId, sequence: id, status: "complete" } as unknown as ConversationEntry;
+}
+
+describe("orkestEmbedScrollRowKey", () => {
+    it("lands on a row keyed by the turn itself", () => {
+        const rows = [userRow("u1"), agentRow(TURN, "run-1"), statusRow("run-1:status", "run-1")];
+        expect(orkestEmbedScrollRowKey(TURN, rows)).toBe(TURN);
+    });
+
+    it("lands on the row showing the tool call whose id is the turn", () => {
+        const rows = [
+            userRow("u1"),
+            toolRow("message:m1:0", "other-call"),
+            toolRow("message:m1:1", TURN),
+            agentRow("message:m1:2", "run-1"),
+        ];
+        expect(orkestEmbedScrollRowKey(TURN, rows)).toBe("message:m1:1");
+    });
+
+    it("lands on the visible row a folded turn rides on when the call's row is folded away", () => {
+        const rows = [
+            userRow("u0"),
+            agentRow("message:m0:0", "run-0", { traceFoldAnchorId: "run-0" }),
+            userRow("u1"),
+            agentRow("message:m1:2", "run-1"),
+            agentRow("message:m1:3", "run-1", { traceFoldAnchorId: "run-1" }),
+            statusRow("run-1:status", "run-1"),
+        ];
+        const calls = [
+            { toolCallId: "earlier", runId: "run-0" },
+            { toolCallId: TURN, runId: "run-1" },
+        ];
+        expect(orkestEmbedScrollRowKey(TURN, rows, calls)).toBe("message:m1:3");
+    });
+
+    it("falls back to the first row of the call's run", () => {
+        const rows = [
+            userRow("u0"),
+            agentRow("message:m0:0", "run-0"),
+            userRow("u1"),
+            agentRow("message:m1:3", "run-1"),
+            statusRow("run-1:status", "run-1"),
+        ];
+        expect(orkestEmbedScrollRowKey(TURN, rows, [{ toolCallId: TURN, runId: "run-1" }])).toBe("message:m1:3");
+    });
+
+    it("finds nothing for a turn this conversation does not hold", () => {
+        const rows = [userRow("u1"), agentRow("message:m1:0", "run-1"), toolRow("message:m1:1", "other-call")];
+        expect(orkestEmbedScrollRowKey(TURN, rows)).toBeUndefined();
+        expect(orkestEmbedScrollRowKey(TURN, rows, [{ toolCallId: TURN, runId: "run-9" }])).toBeUndefined();
+        expect(orkestEmbedScrollRowKey(TURN, [])).toBeUndefined();
+    });
+});
+
+describe("orkestEmbedScrollRow", () => {
+    it("names the row and puts its top at the viewport's top", () => {
+        const row = orkestEmbedScrollRow("message:m1:1");
+        expect(row).toMatchObject({ type: "row", rowKey: "message:m1:1", offset: 0 });
+        // MessageList clamps the opening inset to the viewport height: an inset at least that tall is the top.
+        expect(row.viewportInset).toBeDefined();
+        expect(Number.isFinite(row.viewportInset)).toBe(true);
+        expect(row.viewportInset!).toBeGreaterThanOrEqual(100_000);
+    });
+});
+
+describe("orkestEmbedScrollTarget", () => {
+    it("is the top-of-viewport position of the resolved row", () => {
+        const rows = [userRow("u1"), toolRow("message:m1:1", TURN)];
+        expect(orkestEmbedScrollTarget(TURN, rows)).toEqual(orkestEmbedScrollRow("message:m1:1"));
+    });
+
+    it("is nothing when no row holds the turn, so the chat stays as it is", () => {
+        expect(orkestEmbedScrollTarget(TURN, [userRow("u1")])).toBeUndefined();
+    });
+});
+
+describe("orkestEmbedModelCreate", () => {
+    it("hears a known lane from the same-origin parent only", () => {
+        const win = fakeWindow("");
+        const model = orkestEmbedModelCreate(win as never);
+        const listener = vi.fn();
+        model.subscribe(listener);
+        win.dispatch({ type: "orkest-chat:model", lane: "opus" }, "https://evil.example");
+        win.dispatch({ type: "orkest-chat:model", lane: "opus" }, "https://ghost.ware.cl", {});
+        win.dispatch({ type: "orkest-chat:model", lane: "gpt" });
+        win.dispatch({ type: "orkest-chat:model", lane: 3 });
+        win.dispatch({ type: "orkest-chat:model" });
+        win.dispatch({ type: "orkest-chat:theme", lane: "opus" });
+        win.dispatch(null);
+        expect(listener).not.toHaveBeenCalled();
+        win.dispatch({ type: "orkest-chat:model", lane: "haiku" });
+        win.dispatch({ type: "orkest-chat:model", lane: "sonnet" });
+        win.dispatch({ type: "orkest-chat:model", lane: "opus" });
+        expect(listener.mock.calls).toEqual([["haiku"], ["sonnet"], ["opus"]]);
+    });
+
+    it("stops telling a listener that unsubscribed", () => {
+        const win = fakeWindow("");
+        const model = orkestEmbedModelCreate(win as never);
+        const listener = vi.fn();
+        const stop = model.subscribe(listener);
+        win.dispatch({ type: "orkest-chat:model", lane: "opus" });
+        stop();
+        win.dispatch({ type: "orkest-chat:model", lane: "haiku" });
+        expect(listener.mock.calls).toEqual([["opus"]]);
+    });
+});
+
+describe("orkestEmbedModelFor", () => {
+    const models = (...ids: string[]) => ids.map((id) => ({ id }));
+    const catalog = {
+        providers: [
+            { id: "codex-main", type: "codex", models: models("openai/opus-lookalike", "openai/gpt-5") },
+            {
+                id: "claude-main",
+                type: "claude",
+                models: models(
+                    "anthropic/opus-5-5",
+                    "anthropic/sonnet-5-5",
+                    "anthropic/haiku-5-5",
+                    "anthropic/opus-4-7",
+                    "anthropic/sonnet-4-6",
+                    "anthropic/haiku-4-5",
+                ),
+            },
+            { id: "claude-sonnet-only", type: "claude", models: models("anthropic/sonnet-5-5") },
+        ],
+    } as unknown as Pick<HappyAgentModelCatalog, "providers">;
+
+    it("picks the provider's newest model for each lane", () => {
+        expect(orkestEmbedModelFor("opus", catalog, "claude-main")).toEqual({
+            providerId: "claude-main",
+            modelId: "anthropic/opus-5-5",
+        });
+        expect(orkestEmbedModelFor("sonnet", catalog, "claude-main")).toEqual({
+            providerId: "claude-main",
+            modelId: "anthropic/sonnet-5-5",
+        });
+        expect(orkestEmbedModelFor("haiku", catalog, "claude-main")).toEqual({
+            providerId: "claude-main",
+            modelId: "anthropic/haiku-5-5",
+        });
+    });
+
+    it("looks only at the named provider", () => {
+        expect(orkestEmbedModelFor("opus", catalog, "codex-main")).toEqual({
+            providerId: "codex-main",
+            modelId: "openai/opus-lookalike",
+        });
+        expect(orkestEmbedModelFor("sonnet", catalog, "claude-sonnet-only")).toEqual({
+            providerId: "claude-sonnet-only",
+            modelId: "anthropic/sonnet-5-5",
+        });
+    });
+
+    it("resolves nothing for a lane or provider the catalog does not have", () => {
+        expect(orkestEmbedModelFor("opus", catalog, "claude-sonnet-only")).toBeUndefined();
+        expect(orkestEmbedModelFor("haiku", catalog, "missing")).toBeUndefined();
+        expect(orkestEmbedModelFor("opus", { providers: [] }, "claude-main")).toBeUndefined();
     });
 });

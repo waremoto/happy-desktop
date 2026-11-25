@@ -10,6 +10,9 @@
 
 import {
     productAgentNameSet,
+    type ConversationEntry,
+    type HappyAgentModelCatalog,
+    type HappyAgentModelSelection,
     type StatusBarPersistence,
     type WelcomePersistence,
 } from "happy-desktop-state";
@@ -139,10 +142,43 @@ export interface OrkestEmbedScrollRow {
     readonly type: "row";
     readonly rowKey: string;
     readonly offset: number;
+    /** Distance of the row's top from the viewport's lower edge; MessageList clamps it to the opening height. */
+    readonly viewportInset?: number;
 }
 
-export function orkestEmbedScrollRow(turn: string): OrkestEmbedScrollRow {
-    return { type: "row", rowKey: turn, offset: 0 };
+// GHO-205.7.2 STEP A: stub, wrong on purpose (no top-of-viewport inset yet).
+export function orkestEmbedScrollRow(rowKey: string): OrkestEmbedScrollRow {
+    return { type: "row", rowKey, offset: 0 };
+}
+
+/** A transcript tool call and the run it belongs to (a `ChatElement` of kind `tool_call` fits). */
+export interface OrkestEmbedScrollCall {
+    readonly toolCallId: string;
+    readonly runId: string;
+}
+
+/**
+ * GHO-205.7.2 — the row the chat lands on for GhostShell's turn (the `propose_document` tool call id): a row keyed by
+ * the turn; else the row showing that tool call; else, when its turn is folded, the visible row the fold rides on;
+ * else the first row of the call's run; else none.
+ */
+// GHO-205.7.2 STEP A: stub, wrong on purpose.
+export function orkestEmbedScrollRowKey(
+    _turn: string,
+    _rows: readonly ConversationEntry[],
+    _calls: readonly OrkestEmbedScrollCall[] = [],
+): string | undefined {
+    return undefined;
+}
+
+/** The scroll position for a turn, or none when no row holds it (the chat then stays as it is). */
+// GHO-205.7.2 STEP A: stub, wrong on purpose.
+export function orkestEmbedScrollTarget(
+    _turn: string,
+    _rows: readonly ConversationEntry[],
+    _calls: readonly OrkestEmbedScrollCall[] = [],
+): OrkestEmbedScrollRow | undefined {
+    return undefined;
 }
 
 export interface OrkestEmbedScrollSource {
@@ -179,4 +215,32 @@ export function orkestEmbedScrollCreate(win: EmbedWindow): OrkestEmbedScrollSour
             return () => listeners.delete(listener);
         },
     };
+}
+
+const modelMessage = "orkest-chat:model";
+
+/** GhostShell's model lanes, named as the Claude models' ids name them. */
+export type OrkestEmbedLane = "haiku" | "sonnet" | "opus";
+
+export interface OrkestEmbedModelSource {
+    subscribe(listener: (lane: OrkestEmbedLane) => void): () => void;
+}
+
+/**
+ * GHO-205.7.2 — GhostShell's model picker: `{ type: "orkest-chat:model", lane }` from the framing GhostShell page on
+ * this same origin, with lane one of haiku, sonnet or opus. Anything else is ignored.
+ */
+// GHO-205.7.2 STEP A: stub, wrong on purpose (never fires).
+export function orkestEmbedModelCreate(_win: EmbedWindow): OrkestEmbedModelSource {
+    return { subscribe: () => () => undefined };
+}
+
+/** The newest model of `providerId` whose id names the lane, as the selection `sessionModelUpdate` takes. */
+// GHO-205.7.2 STEP A: stub, wrong on purpose.
+export function orkestEmbedModelFor(
+    _lane: OrkestEmbedLane,
+    _catalog: Pick<HappyAgentModelCatalog, "providers">,
+    _providerId: string,
+): HappyAgentModelSelection | undefined {
+    return undefined;
 }
