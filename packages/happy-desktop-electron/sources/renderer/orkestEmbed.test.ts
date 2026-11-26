@@ -18,6 +18,12 @@ import {
     orkestEmbedWorkItemCreate,
     orkestEmbedWorkItemFollow,
     orkestEmbedWorkItemPlace,
+    orkestEmbedLaneCreate,
+    orkestEmbedLaneDecide,
+    orkestEmbedLaneNoticeFollow,
+    orkestEmbedLaneNoticePlace,
+    ORKEST_EMBED_LANE_NOTICE_ID,
+    ORKEST_EMBED_WORK_ITEM_ID,
     orkestEmbedModelCreate,
     orkestEmbedScrollCreate,
     orkestEmbedModelFor,
@@ -615,5 +621,202 @@ describe("orkestEmbedWorkItemPlace", () => {
         expect(page.children).toEqual([page.chip(), page.composer]);
         expect(page.chip()?.textContent).toBe("GHO-2");
         stop();
+    });
+});
+
+// GHO-207.6.2: the lane picked per session. A lane is a Happy provider; a refused lane says so and changes nothing.
+const laneMenus = {
+    currentProviderId: "claude",
+    currentModelId: "claude-sonnet-5-5",
+    modelOptions: [
+        { providerId: "claude", modelId: "claude-opus-5-5", disabled: false },
+        { providerId: "claude", modelId: "claude-sonnet-5-5", disabled: false },
+        { providerId: "claude_gw", modelId: "claude-sonnet-5-5", disabled: false },
+        { providerId: "claude_gw", modelId: "claude-haiku-5-5", disabled: false },
+        { providerId: "claude_api", modelId: "claude-sonnet-5-5", disabled: true },
+    ],
+};
+
+describe("orkestEmbedLaneCreate", () => {
+    it("hears only a well-formed lane from the framing page, and keeps it until taken", () => {
+        const win = fakeWindow("");
+        const lane = orkestEmbedLaneCreate(win as never);
+        const listener = vi.fn();
+        lane.subscribe(listener);
+        win.dispatch({ type: "orkest-chat:lane", lane: "claude_gw" }, "https://evil.example");
+        win.dispatch({ type: "orkest-chat:lane", lane: "Claude GW" });
+        win.dispatch({ type: "orkest-chat:lane", lane: "claude_gw", modelId: 7 });
+        win.dispatch({ type: "orkest-chat:lane" });
+        expect(listener).not.toHaveBeenCalled();
+        expect(lane.take()).toBeUndefined();
+        win.dispatch({ type: "orkest-chat:lane", lane: "claude_gw", modelId: "claude-haiku-5-5" });
+        expect(listener).toHaveBeenCalledOnce();
+        expect(lane.take()).toEqual({ lane: "claude_gw", modelId: "claude-haiku-5-5" });
+        expect(lane.take()).toBeUndefined();
+    });
+});
+
+describe("orkestEmbedLaneDecide", () => {
+    it("switches to the lane's pinned model, or its first, and does nothing when already there", () => {
+        expect(orkestEmbedLaneDecide({ lane: "claude_gw", modelId: "claude-haiku-5-5" }, laneMenus)).toEqual({
+            selection: { providerId: "claude_gw", modelId: "claude-haiku-5-5" },
+            error: null,
+        });
+        expect(orkestEmbedLaneDecide({ lane: "claude_gw" }, laneMenus).selection).toEqual({
+            providerId: "claude_gw",
+            modelId: "claude-sonnet-5-5",
+        });
+        expect(orkestEmbedLaneDecide({ lane: "claude", modelId: "claude-sonnet-5-5" }, laneMenus)).toEqual({ error: null });
+    });
+
+    it("never falls back: a lane not offered, switched off, without its model or without menus is an error", () => {
+        const refused = [
+            orkestEmbedLaneDecide({ lane: "codex_gw" }, laneMenus),
+            orkestEmbedLaneDecide({ lane: "claude_api" }, laneMenus),
+            orkestEmbedLaneDecide({ lane: "claude_gw", modelId: "claude-opus-5-5" }, laneMenus),
+            orkestEmbedLaneDecide({ lane: "claude_gw" }, undefined),
+        ];
+        for (const decision of refused) {
+            expect(decision.selection).toBeUndefined();
+            expect(decision.error).toMatch(/Lane "\w+".*Nothing was changed/);
+        }
+        expect(refused[0].error).toContain("not offered");
+        expect(refused[1].error).toContain("switched off");
+    });
+});
+
+describe("orkestEmbedChatFollow lane", () => {
+    function follow() {
+        const win = fakeWindow("");
+        const listeners = new Set<() => void>();
+        let conversation: unknown = { type: "loading" };
+        const workspace = {
+            get: () => ({ conversation }),
+            subscribe(listener: () => void) {
+                listeners.add(listener);
+                return () => listeners.delete(listener);
+            },
+            conversationScrollJump: vi.fn(),
+            conversationToolCallRuns: vi.fn(() => []),
+            sessionModelUpdate: vi.fn(),
+            draftAppend: vi.fn(async () => undefined),
+        };
+        const notices: (string | null)[] = [];
+        const stop = orkestEmbedChatFollow({
+            scroll: orkestEmbedScrollCreate(win as never),
+            model: orkestEmbedModelCreate(win as never),
+            lane: orkestEmbedLaneCreate(win as never),
+            laneNotice: (text) => notices.push(text),
+            workspace: { get: () => workspace as never, subscribe: () => () => undefined },
+        });
+        const open = (value: Record<string, unknown>) => {
+            conversation = { type: "ready", value: { ready: true, ...value } };
+            for (const listener of listeners) listener();
+        };
+        return { win, workspace, notices, open, stop };
+    }
+
+    it("switches the open conversation to the lane, and applies a lane that came first once it opens", () => {
+        const chat = follow();
+        chat.win.dispatch({ type: "orkest-chat:lane", lane: "claude_gw", modelId: "claude-haiku-5-5" });
+        expect(chat.workspace.sessionModelUpdate).not.toHaveBeenCalled();
+        chat.open({ conversationId: "s1", entries: [], menus: laneMenus });
+        expect(chat.workspace.sessionModelUpdate).toHaveBeenCalledWith({ providerId: "claude_gw", modelId: "claude-haiku-5-5" });
+        expect(chat.notices).toEqual([null]);
+        chat.stop();
+    });
+
+    it("shows the refusal and keeps the conversation's provider", () => {
+        const chat = follow();
+        chat.open({ conversationId: "s1", entries: [], menus: laneMenus });
+        chat.win.dispatch({ type: "orkest-chat:lane", lane: "codex_gw" });
+        expect(chat.workspace.sessionModelUpdate).not.toHaveBeenCalled();
+        expect(chat.notices.at(-1)).toContain('Lane "codex_gw" is not offered');
+        chat.win.dispatch({ type: "orkest-chat:lane", lane: "claude" });
+        expect(chat.notices.at(-1)).toBeNull();
+        chat.stop();
+    });
+});
+
+function multiDocument() {
+    const children: unknown[] = [];
+    const parent = {
+        insertBefore(node: unknown, before: unknown) {
+            const at = children.indexOf(node);
+            if (at >= 0) children.splice(at, 1);
+            children.splice(children.indexOf(before), 0, node);
+            return node;
+        },
+    };
+    const composer = { parentElement: parent };
+    children.push(composer);
+    const made: Record<string, unknown>[] = [];
+    const doc = {
+        querySelector: (selector: string) => (selector === '[data-happy-desktop-ui="composer"]' ? composer : null),
+        getElementById: (id: string) => made.find((e) => e.id === id && children.includes(e)) ?? null,
+        createElement: () => {
+            const attributes: Record<string, string> = {};
+            const element: Record<string, unknown> = {
+                id: "",
+                textContent: null,
+                title: "",
+                style: { cssText: "" },
+                attributes,
+                setAttribute: (name: string, value: string) => {
+                    attributes[name] = value;
+                },
+                get nextElementSibling() {
+                    const at = children.indexOf(element);
+                    return at < 0 ? null : children[at + 1];
+                },
+                parentElement: parent,
+                remove: () => {
+                    children.splice(children.indexOf(element), 1);
+                },
+            };
+            made.push(element);
+            return element;
+        },
+    };
+    const byId = (id: string) => made.find((e) => e.id === id) ?? null;
+    return { doc, children, composer, byId };
+}
+
+describe("orkestEmbedLaneNoticePlace", () => {
+    it("puts one alert above the composer and the work-item chip, stable under the observer, and removes it", () => {
+        const page = multiDocument();
+        const text = 'Lane "codex_gw" is not offered in this chat.';
+        orkestEmbedWorkItemPlace(page.doc as never, { label: "GHO-1", title: "" });
+        orkestEmbedLaneNoticePlace(page.doc as never, text);
+        const chip = page.byId(ORKEST_EMBED_WORK_ITEM_ID);
+        const notice = page.byId(ORKEST_EMBED_LANE_NOTICE_ID);
+        expect(page.children).toEqual([notice, chip, page.composer]);
+        expect((notice?.attributes as Record<string, string>).role).toBe("alert");
+        // Each placement again (as the document observer runs both) moves nothing.
+        orkestEmbedWorkItemPlace(page.doc as never, { label: "GHO-1", title: "" });
+        orkestEmbedLaneNoticePlace(page.doc as never, text);
+        expect(page.children).toEqual([notice, chip, page.composer]);
+        orkestEmbedLaneNoticePlace(page.doc as never, null);
+        expect(page.children).toEqual([chip, page.composer]);
+    });
+
+    it("follows the shown text and places it again when the document changes", () => {
+        const page = multiDocument();
+        let changed: () => void = () => undefined;
+        const notice = orkestEmbedLaneNoticeFollow({
+            doc: page.doc as never,
+            observe: (callback) => {
+                changed = callback;
+                return () => undefined;
+            },
+        });
+        notice.show("Lane refused");
+        expect(page.children).toEqual([page.byId(ORKEST_EMBED_LANE_NOTICE_ID), page.composer]);
+        page.children.reverse();
+        changed();
+        expect(page.children).toEqual([page.byId(ORKEST_EMBED_LANE_NOTICE_ID), page.composer]);
+        notice.show(null);
+        expect(page.children).toEqual([page.composer]);
+        notice.stop();
     });
 });

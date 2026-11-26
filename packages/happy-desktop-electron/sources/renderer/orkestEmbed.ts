@@ -342,8 +342,11 @@ export function orkestEmbedChatFollow(input: {
     readonly model: OrkestEmbedModelSource;
     readonly workspace: OrkestEmbedWorkspaceSource;
     readonly compose?: OrkestEmbedComposeSource;
+    /** GHO-207.6.2: GhostShell's lane picker, and where a refused lane is shown (null clears it). */
+    readonly lane?: OrkestEmbedLaneSource;
+    readonly laneNotice?: (text: string | null) => void;
 }): () => void {
-    const { scroll, model, workspace, compose } = input;
+    const { scroll, model, workspace, compose, lane, laneNotice } = input;
     let followed: OrkestEmbedWorkspace | undefined;
     let followedStop: (() => void) | undefined;
     let openSeen: HappyAgentSessionId | undefined;
@@ -355,6 +358,12 @@ export function orkestEmbedChatFollow(input: {
     /* A suggestion joins the draft (draftAppend keeps what the person already typed). */
     const composeApply = (text: string, target: OrkestEmbedWorkspace, open: HappyAgentConversationSnapshot) => {
         void target.draftAppend(open.conversationId, text).catch(() => undefined);
+    };
+    /* A lane switches the open conversation's provider, or says why it did not: never another provider instead. */
+    const laneApply = (request: OrkestEmbedLaneRequest, target: OrkestEmbedWorkspace, open: HappyAgentConversationSnapshot) => {
+        const decision = orkestEmbedLaneDecide(request, open.menus);
+        laneNotice?.(decision.error);
+        if (decision.selection) target.sessionModelUpdate(decision.selection);
     };
     /* A turn that came before its conversation opened is applied once, as it opens. */
     const openFollow = () => {
@@ -370,6 +379,8 @@ export function orkestEmbedChatFollow(input: {
         if (turn !== undefined) scrollApply(turn, target, open);
         const text = compose?.take();
         if (text !== undefined) composeApply(text, target, open);
+        const request = lane?.take();
+        if (request !== undefined) laneApply(request, target, open);
     };
     const workspaceFollow = () => {
         const target = workspace.get();
@@ -405,6 +416,13 @@ export function orkestEmbedChatFollow(input: {
             if (!target || !open) return;
             const text = compose.take();
             if (text !== undefined) composeApply(text, target, open);
+        }) ?? (() => undefined),
+        lane?.subscribe(() => {
+            const target = workspace.get();
+            const open = target && openConversation(target);
+            if (!target || !open) return;
+            const request = lane.take();
+            if (request !== undefined) laneApply(request, target, open);
         }) ?? (() => undefined),
     ];
     workspaceFollow();
@@ -574,5 +592,86 @@ export function orkestEmbedWorkItemFollow(input: {
     place();
     return () => {
         for (const stop of stops) stop();
+    };
+}
+
+const laneMessage = "orkest-chat:lane";
+const LANE_ID = /^[a-z][a-z0-9_]{0,31}$/;
+
+/** GhostShell's lane for the open conversation: a Happy provider id, and the model that lane pins when it names one. */
+export interface OrkestEmbedLaneRequest {
+    readonly lane: string;
+    readonly modelId?: string;
+}
+
+export interface OrkestEmbedLaneSource {
+    /** The last lane GhostShell sent, until it is taken. */
+    take(): OrkestEmbedLaneRequest | undefined;
+    subscribe(listener: (request: OrkestEmbedLaneRequest) => void): () => void;
+}
+
+/**
+ * GHO-207.6.2 — GhostShell's lane picker: `{ type: "orkest-chat:lane", lane, modelId? }` from the framing GhostShell
+ * page on this same origin. A lane is a Happy provider of this tenant (`claude`, `claude_gw`, `codex_gw`, ...); the
+ * optional model is the one that lane pins. Anything malformed is ignored. The lane stays pending (`take`) for a
+ * conversation that opens after the message arrived.
+ */
+export function orkestEmbedLaneCreate(win: EmbedWindow): OrkestEmbedLaneSource {
+    // RED STUB (GHO-207.6.2): no lane message is read yet.
+    void win;
+    void laneMessage;
+    void LANE_ID;
+    return { take: () => undefined, subscribe: () => () => undefined };
+}
+
+/** The part of a conversation's menus a lane is decided in (a `HappyAgentConversationSnapshot["menus"]` fits). */
+export interface OrkestEmbedLaneMenus {
+    readonly currentProviderId: string;
+    readonly currentModelId?: string | null;
+    readonly modelOptions?: readonly { readonly providerId: string; readonly modelId: string; readonly disabled?: boolean }[];
+}
+
+/**
+ * What a lane does to the open conversation: the selection to switch to (none when it already runs there), or the
+ * error a person sees. A lane the conversation's menus do not offer, or offer only switched off, changes nothing:
+ * it never falls back to another provider.
+ */
+export function orkestEmbedLaneDecide(
+    request: OrkestEmbedLaneRequest,
+    menus: OrkestEmbedLaneMenus | null | undefined,
+): { readonly selection?: HappyAgentModelSelection; readonly error: string | null } {
+    // RED STUB (GHO-207.6.2): every lane is taken as it is, with no check.
+    void menus;
+    return { selection: { providerId: request.lane, modelId: request.modelId ?? "" }, error: null };
+}
+
+export const ORKEST_EMBED_LANE_NOTICE_ID = "orkest-lane-error";
+
+const NOTICE_STYLE =
+    "display:block;max-width:calc(100% - 24px);margin:0 12px 6px;padding:6px 10px;border:1px solid currentColor;" +
+    "border-radius:8px;font-size:12px;line-height:18px;";
+
+/** Show a refused lane right above the composer as an alert, or remove it for null. */
+export function orkestEmbedLaneNoticePlace(doc: OrkestEmbedChipDocument, text: string | null): void {
+    // RED STUB (GHO-207.6.2): nothing is shown yet.
+    void doc;
+    void text;
+    void NOTICE_STYLE;
+}
+
+/** The lane notice the chat shows, kept in place as the composer re-renders (`observe`: a MutationObserver). */
+export function orkestEmbedLaneNoticeFollow(input: {
+    readonly doc: OrkestEmbedChipDocument;
+    readonly observe: (callback: () => void) => () => void;
+}): { readonly show: (text: string | null) => void; readonly stop: () => void } {
+    let current: string | null = null;
+    const place = () => orkestEmbedLaneNoticePlace(input.doc, current);
+    const stop = input.observe(place);
+    return {
+        show(text) {
+            current = text;
+            place();
+        },
+        stop,
     };
 }
