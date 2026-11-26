@@ -132,6 +132,8 @@ import {
     orkestEmbedEnabled,
     orkestEmbedComposeCreate,
     orkestEmbedModelCreate,
+    orkestEmbedLaneCreate,
+    orkestEmbedLaneNoticeFollow,
     orkestEmbedWorkItemCreate,
     orkestEmbedWorkItemFollow,
     orkestEmbedScrollCreate,
@@ -1785,12 +1787,26 @@ if (mediaPreviewBridge) {
             happyAgents.get().happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
                 ?.session;
         // GHO-205.7.2 — GhostShell's "Show previous" scrolls the open chat to a turn, and its model picker switches it.
+        // GHO-207.6.2 — its lane picker switches the provider; a refused lane is an alert above the composer.
+        const laneNotice = orkestEmbed
+            ? orkestEmbedLaneNoticeFollow({
+                  doc: document as never,
+                  observe: (callback) => {
+                      const observer = new MutationObserver(callback);
+                      observer.observe(document.body, { childList: true, subtree: true });
+                      return () => observer.disconnect();
+                  },
+              })
+            : undefined;
+        if (laneNotice) appDisposers.push(laneNotice.stop);
         if (orkestEmbed)
             appDisposers.push(
                 orkestEmbedChatFollow({
                     scroll: orkestEmbedScrollCreate(window),
                     model: orkestEmbedModelCreate(window),
                     compose: orkestEmbedComposeCreate(window),
+                    lane: orkestEmbedLaneCreate(window),
+                    laneNotice: laneNotice?.show,
                     workspace: {
                         get: () => {
                             const directory = happyAgents.get();

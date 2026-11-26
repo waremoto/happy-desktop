@@ -617,11 +617,30 @@ export interface OrkestEmbedLaneSource {
  * conversation that opens after the message arrived.
  */
 export function orkestEmbedLaneCreate(win: EmbedWindow): OrkestEmbedLaneSource {
-    // RED STUB (GHO-207.6.2): no lane message is read yet.
-    void win;
-    void laneMessage;
-    void LANE_ID;
-    return { take: () => undefined, subscribe: () => () => undefined };
+    let pending: OrkestEmbedLaneRequest | undefined;
+    const listeners = new Set<(request: OrkestEmbedLaneRequest) => void>();
+    win.addEventListener("message", (event: MessageEvent) => {
+        if (event.origin !== win.location.origin || event.source !== win.parent) return;
+        const data = event.data as { type?: unknown; lane?: unknown; modelId?: unknown } | null;
+        if (!data || data.type !== laneMessage) return;
+        if (typeof data.lane !== "string" || !LANE_ID.test(data.lane)) return;
+        if (data.modelId !== undefined && (typeof data.modelId !== "string" || !data.modelId || data.modelId.length > 200)) return;
+        const request: OrkestEmbedLaneRequest =
+            data.modelId === undefined ? { lane: data.lane } : { lane: data.lane, modelId: data.modelId };
+        pending = request;
+        for (const listener of listeners) listener(request);
+    });
+    return {
+        take() {
+            const request = pending;
+            pending = undefined;
+            return request;
+        },
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+    };
 }
 
 /** The part of a conversation's menus a lane is decided in (a `HappyAgentConversationSnapshot["menus"]` fits). */
@@ -640,9 +659,16 @@ export function orkestEmbedLaneDecide(
     request: OrkestEmbedLaneRequest,
     menus: OrkestEmbedLaneMenus | null | undefined,
 ): { readonly selection?: HappyAgentModelSelection; readonly error: string | null } {
-    // RED STUB (GHO-207.6.2): every lane is taken as it is, with no check.
-    void menus;
-    return { selection: { providerId: request.lane, modelId: request.modelId ?? "" }, error: null };
+    const nothing = "Nothing was changed; this chat stays on its current lane.";
+    if (!menus) return { error: `Lane "${request.lane}" cannot be chosen yet: this chat has no model menu. ${nothing}` };
+    const offered = (menus.modelOptions ?? []).filter((option) => option.providerId === request.lane);
+    if (offered.length === 0) return { error: `Lane "${request.lane}" is not offered in this chat. ${nothing}` };
+    const enabled = offered.filter((option) => !option.disabled);
+    if (enabled.length === 0) return { error: `Lane "${request.lane}" is switched off in this chat. ${nothing}` };
+    const pick = request.modelId === undefined ? enabled[0] : enabled.find((option) => option.modelId === request.modelId);
+    if (!pick) return { error: `Lane "${request.lane}" does not offer ${request.modelId}. ${nothing}` };
+    if (menus.currentProviderId === pick.providerId && menus.currentModelId === pick.modelId) return { error: null };
+    return { selection: { providerId: pick.providerId, modelId: pick.modelId }, error: null };
 }
 
 export const ORKEST_EMBED_LANE_NOTICE_ID = "orkest-lane-error";
@@ -653,10 +679,25 @@ const NOTICE_STYLE =
 
 /** Show a refused lane right above the composer as an alert, or remove it for null. */
 export function orkestEmbedLaneNoticePlace(doc: OrkestEmbedChipDocument, text: string | null): void {
-    // RED STUB (GHO-207.6.2): nothing is shown yet.
-    void doc;
-    void text;
-    void NOTICE_STYLE;
+    const existing = doc.getElementById(ORKEST_EMBED_LANE_NOTICE_ID);
+    if (text === null) {
+        existing?.remove();
+        return;
+    }
+    const composer = doc.querySelector(COMPOSER_SELECTOR);
+    if (!composer?.parentElement) return;
+    const notice = existing ?? doc.createElement("div");
+    if (!existing) {
+        notice.id = ORKEST_EMBED_LANE_NOTICE_ID;
+        notice.setAttribute("data-orkest-lane-error", "");
+        notice.setAttribute("role", "alert");
+        notice.style.cssText = NOTICE_STYLE;
+    }
+    if (notice.textContent !== text) notice.textContent = text;
+    // Above the work-item chip when there is one, so the two never swap places under the document observer.
+    const chip = doc.getElementById(ORKEST_EMBED_WORK_ITEM_ID);
+    const anchor = chip && chip.nextElementSibling === composer ? chip : composer;
+    if (notice.nextElementSibling !== anchor) composer.parentElement.insertBefore(notice, anchor);
 }
 
 /** The lane notice the chat shows, kept in place as the composer re-renders (`observe`: a MutationObserver). */
