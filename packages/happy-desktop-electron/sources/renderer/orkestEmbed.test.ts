@@ -12,7 +12,12 @@ import {
 import {
     orkestBridgeEndpoint,
     orkestEmbedBrandApply,
+    ORKEST_EMBED_COMPOSE_MAX,
     orkestEmbedChatFollow,
+    orkestEmbedComposeCreate,
+    orkestEmbedWorkItemCreate,
+    orkestEmbedWorkItemFollow,
+    orkestEmbedWorkItemPlace,
     orkestEmbedModelCreate,
     orkestEmbedScrollCreate,
     orkestEmbedModelFor,
@@ -391,6 +396,7 @@ describe("orkestEmbedChatFollow", () => {
             conversationScrollJump: vi.fn(),
             conversationToolCallRuns: vi.fn(() => [{ toolCallId: TURN, runId: "run-1" }]),
             sessionModelUpdate: vi.fn(),
+            draftAppend: vi.fn(async () => undefined),
         };
         return {
             workspace,
@@ -416,6 +422,7 @@ describe("orkestEmbedChatFollow", () => {
         const stop = orkestEmbedChatFollow({
             scroll: orkestEmbedScrollCreate(win as never),
             model: orkestEmbedModelCreate(win as never),
+            compose: orkestEmbedComposeCreate(win as never),
             workspace: { get: () => fake.workspace as never, subscribe: () => () => undefined },
         });
         return { win, ...fake, stop };
@@ -450,6 +457,26 @@ describe("orkestEmbedChatFollow", () => {
         chat.stop();
     });
 
+    it("adds GhostShell's suggestion to the open conversation's draft", () => {
+        const chat = follow();
+        chat.open({ conversationId: "s1", entries: [] });
+        chat.win.dispatch({ type: "orkest-chat:compose", text: "  Draft a roadmap  " });
+        expect(chat.workspace.draftAppend).toHaveBeenCalledWith("s1", "Draft a roadmap");
+        chat.stop();
+    });
+
+    it("keeps a suggestion that came first for the conversation that opens, once", () => {
+        const chat = follow();
+        chat.win.dispatch({ type: "orkest-chat:compose", text: "Draft a roadmap" });
+        expect(chat.workspace.draftAppend).not.toHaveBeenCalled();
+        chat.open({ conversationId: "s1", standIn: true, entries: [] });
+        expect(chat.workspace.draftAppend).not.toHaveBeenCalled();
+        chat.open({ conversationId: "s1", entries: [] });
+        chat.open({ conversationId: "s1", entries: [] });
+        expect(chat.workspace.draftAppend).toHaveBeenCalledOnce();
+        chat.stop();
+    });
+
     it("switches the open conversation to its provider's newest model for the lane, and only when it changes", () => {
         const chat = follow();
         chat.win.dispatch({ type: "orkest-chat:model", lane: "opus" });
@@ -464,5 +491,129 @@ describe("orkestEmbedChatFollow", () => {
             modelId: "anthropic/opus-5-5",
         });
         chat.stop();
+    });
+});
+
+describe("orkestEmbedComposeCreate", () => {
+    it("hears only non-blank text of bounded length from the framing page", () => {
+        const win = fakeWindow("");
+        const compose = orkestEmbedComposeCreate(win as never);
+        const listener = vi.fn();
+        compose.subscribe(listener);
+        win.dispatch({ type: "orkest-chat:compose", text: "hi" }, "https://evil.example");
+        win.dispatch({ type: "orkest-chat:compose", text: "hi" }, "https://ghost.ware.cl", {});
+        win.dispatch({ type: "orkest-chat:compose", text: "   " });
+        win.dispatch({ type: "orkest-chat:compose", text: 3 });
+        win.dispatch({ type: "orkest-chat:compose", text: "x".repeat(ORKEST_EMBED_COMPOSE_MAX + 1) });
+        expect(listener).not.toHaveBeenCalled();
+        expect(compose.take()).toBeUndefined();
+        win.dispatch({ type: "orkest-chat:compose", text: "Draft a roadmap" });
+        expect(listener).toHaveBeenCalledWith("Draft a roadmap");
+        expect(compose.take()).toBe("Draft a roadmap");
+        expect(compose.take()).toBeUndefined();
+    });
+});
+
+function chipDocument(withComposer = true) {
+    const children: unknown[] = [];
+    const parent = {
+        insertBefore(node: unknown, before: unknown) {
+            const at = children.indexOf(node);
+            if (at >= 0) children.splice(at, 1);
+            children.splice(children.indexOf(before), 0, node);
+            return node;
+        },
+    };
+    const composer = { parentElement: parent };
+    if (withComposer) children.push(composer);
+    let chip: Record<string, unknown> | null = null;
+    const doc = {
+        querySelector: (selector: string) =>
+            withComposer && selector === '[data-happy-desktop-ui="composer"]' ? composer : null,
+        getElementById: (id: string) => (chip && chip.id === id && children.includes(chip) ? chip : null),
+        createElement: () => {
+            const attributes: Record<string, string> = {};
+            const made: Record<string, unknown> = {
+                id: "",
+                textContent: null,
+                title: "",
+                style: { cssText: "" },
+                attributes,
+                setAttribute: (name: string, value: string) => {
+                    attributes[name] = value;
+                },
+                get nextElementSibling() {
+                    const at = children.indexOf(made);
+                    return at < 0 ? null : children[at + 1];
+                },
+                parentElement: parent,
+                remove: () => {
+                    children.splice(children.indexOf(made), 1);
+                },
+            };
+            chip = made;
+            return made;
+        },
+    };
+    return { doc, children, composer, chip: () => chip };
+}
+
+describe("orkestEmbedWorkItemCreate", () => {
+    it("keeps the last well-formed work item, and null clears it", () => {
+        const win = fakeWindow("");
+        const source = orkestEmbedWorkItemCreate(win as never);
+        const listener = vi.fn();
+        source.subscribe(listener);
+        win.dispatch({ type: "orkest-chat:work-item", item: { label: "GHO-1", title: "t" } }, "https://evil.example");
+        win.dispatch({ type: "orkest-chat:work-item", item: { label: "", title: "t" } });
+        win.dispatch({ type: "orkest-chat:work-item", item: { label: "GHO-1" } });
+        win.dispatch({ type: "orkest-chat:work-item", item: "GHO-1" });
+        expect(listener).not.toHaveBeenCalled();
+        win.dispatch({ type: "orkest-chat:work-item", item: { label: " GHO-1 ", title: " Fix it " } });
+        expect(source.get()).toEqual({ label: "GHO-1", title: "Fix it" });
+        win.dispatch({ type: "orkest-chat:work-item", item: null });
+        expect(source.get()).toBeNull();
+        expect(listener).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe("orkestEmbedWorkItemPlace", () => {
+    it("puts one chip right above the composer and removes it for null", () => {
+        const page = chipDocument();
+        orkestEmbedWorkItemPlace(page.doc as never, { label: "GHO-1", title: "Fix it" });
+        orkestEmbedWorkItemPlace(page.doc as never, { label: "GHO-1", title: "Fix it" });
+        expect(page.children).toEqual([page.chip(), page.composer]);
+        expect(page.chip()?.textContent).toBe("GHO-1 · Fix it");
+        expect((page.chip()?.attributes as Record<string, string>)["data-orkest-work-item"]).toBe("");
+        orkestEmbedWorkItemPlace(page.doc as never, null);
+        expect(page.children).toEqual([page.composer]);
+    });
+
+    it("shows nothing before the composer exists", () => {
+        const page = chipDocument(false);
+        orkestEmbedWorkItemPlace(page.doc as never, { label: "GHO-1", title: "" });
+        expect(page.chip()).toBeNull();
+    });
+
+    it("follows the work item and places the chip again when the document changes", () => {
+        const page = chipDocument();
+        const win = fakeWindow("");
+        let changed: () => void = () => undefined;
+        const stop = orkestEmbedWorkItemFollow({
+            doc: page.doc as never,
+            source: orkestEmbedWorkItemCreate(win as never),
+            observe: (callback) => {
+                changed = callback;
+                return () => undefined;
+            },
+        });
+        expect(page.chip()).toBeNull();
+        win.dispatch({ type: "orkest-chat:work-item", item: { label: "GHO-2", title: "" } });
+        expect(page.children).toEqual([page.chip(), page.composer]);
+        page.children.reverse();
+        changed();
+        expect(page.children).toEqual([page.chip(), page.composer]);
+        expect(page.chip()?.textContent).toBe("GHO-2");
+        stop();
     });
 });

@@ -299,7 +299,7 @@ export function orkestEmbedModelFor(
 
 type OrkestEmbedWorkspace = Pick<
     HappyAgentWorkspaceStore,
-    "get" | "subscribe" | "conversationScrollJump" | "conversationToolCallRuns" | "sessionModelUpdate"
+    "get" | "subscribe" | "conversationScrollJump" | "conversationToolCallRuns" | "sessionModelUpdate" | "draftAppend"
 >;
 
 /** The workspace on screen, which changes as the Happy Agent connects or reconnects. */
@@ -341,8 +341,9 @@ export function orkestEmbedChatFollow(input: {
     readonly scroll: OrkestEmbedScrollSource;
     readonly model: OrkestEmbedModelSource;
     readonly workspace: OrkestEmbedWorkspaceSource;
+    readonly compose?: OrkestEmbedComposeSource;
 }): () => void {
-    const { scroll, model, workspace } = input;
+    const { scroll, model, workspace, compose } = input;
     let followed: OrkestEmbedWorkspace | undefined;
     let followedStop: (() => void) | undefined;
     let openSeen: HappyAgentSessionId | undefined;
@@ -350,6 +351,10 @@ export function orkestEmbedChatFollow(input: {
     const scrollApply = (turn: string, target: OrkestEmbedWorkspace, open: HappyAgentConversationSnapshot) => {
         const position = orkestEmbedScrollTarget(turn, open.entries, target.conversationToolCallRuns());
         if (position) target.conversationScrollJump(open.conversationId, position);
+    };
+    /* A suggestion joins the draft (draftAppend keeps what the person already typed). */
+    const composeApply = (text: string, target: OrkestEmbedWorkspace, open: HappyAgentConversationSnapshot) => {
+        void target.draftAppend(open.conversationId, text).catch(() => undefined);
     };
     /* A turn that came before its conversation opened is applied once, as it opens. */
     const openFollow = () => {
@@ -363,6 +368,8 @@ export function orkestEmbedChatFollow(input: {
         openSeen = open.conversationId;
         const turn = scroll.take();
         if (turn !== undefined) scrollApply(turn, target, open);
+        const text = compose?.take();
+        if (text !== undefined) composeApply(text, target, open);
     };
     const workspaceFollow = () => {
         const target = workspace.get();
@@ -392,10 +399,179 @@ export function orkestEmbedChatFollow(input: {
             if (!selection || selection.modelId === menus.currentModelId) return;
             target.sessionModelUpdate(selection);
         }),
+        compose?.subscribe(() => {
+            const target = workspace.get();
+            const open = target && openConversation(target);
+            if (!target || !open) return;
+            const text = compose.take();
+            if (text !== undefined) composeApply(text, target, open);
+        }) ?? (() => undefined),
     ];
     workspaceFollow();
     return () => {
         for (const stop of stops) stop();
         followedStop?.();
+    };
+}
+
+const composeMessage = "orkest-chat:compose";
+/** The longest suggestion GhostShell may put in the composer. */
+export const ORKEST_EMBED_COMPOSE_MAX = 4000;
+
+export interface OrkestEmbedComposeSource {
+    /** The last suggestion GhostShell sent, until it is taken. */
+    take(): string | undefined;
+    subscribe(listener: (text: string) => void): () => void;
+}
+
+/**
+ * GHO-207.3.2 — GhostShell's "No roadmap yet" action suggests a first message: `{ type: "orkest-chat:compose", text }`
+ * from the framing GhostShell page on this same origin. Only the parent window is heard, and only non-blank text up to
+ * {@link ORKEST_EMBED_COMPOSE_MAX} characters passes. The text stays pending (`take`) for a conversation that opens
+ * after the message arrived.
+ */
+export function orkestEmbedComposeCreate(win: EmbedWindow): OrkestEmbedComposeSource {
+    let pending: string | undefined;
+    const listeners = new Set<(text: string) => void>();
+    win.addEventListener("message", (event: MessageEvent) => {
+        if (event.origin !== win.location.origin || event.source !== win.parent) return;
+        const data = event.data as { type?: unknown; text?: unknown } | null;
+        if (!data || data.type !== composeMessage) return;
+        if (typeof data.text !== "string") return;
+        const text = data.text.trim();
+        if (text.length === 0 || text.length > ORKEST_EMBED_COMPOSE_MAX) return;
+        void text; // GHO-207.3.2 red stub: the suggestion is dropped.
+    });
+    return {
+        take() {
+            const text = pending;
+            pending = undefined;
+            return text;
+        },
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+    };
+}
+
+const workItemMessage = "orkest-chat:work-item";
+
+/** The work item a ticket chat is about, as its chip names it. */
+export interface OrkestEmbedWorkItem {
+    readonly label: string;
+    readonly title: string;
+}
+
+export interface OrkestEmbedWorkItemSource {
+    get(): OrkestEmbedWorkItem | null;
+    subscribe(listener: (item: OrkestEmbedWorkItem | null) => void): () => void;
+}
+
+function workItemParse(value: unknown): OrkestEmbedWorkItem | null | undefined {
+    if (value === null) return null;
+    if (!value || typeof value !== "object") return undefined;
+    const { label, title } = value as { label?: unknown; title?: unknown };
+    if (typeof label !== "string" || typeof title !== "string") return undefined;
+    const cleanLabel = label.trim();
+    const cleanTitle = title.trim();
+    if (cleanLabel.length === 0 || cleanLabel.length > 40 || cleanTitle.length > 200) return undefined;
+    return { label: cleanLabel, title: cleanTitle };
+}
+
+/**
+ * GHO-207.3.1 — the work item a ticket chat is about: `{ type: "orkest-chat:work-item", item }` from the framing
+ * GhostShell page, with item `{ label, title }`, or null when the chat is not about one. The chat shows it as a chip
+ * above the composer instead of a drafted message.
+ */
+export function orkestEmbedWorkItemCreate(win: EmbedWindow): OrkestEmbedWorkItemSource {
+    let current: OrkestEmbedWorkItem | null = null;
+    const listeners = new Set<(item: OrkestEmbedWorkItem | null) => void>();
+    win.addEventListener("message", (event: MessageEvent) => {
+        if (event.origin !== win.location.origin || event.source !== win.parent) return;
+        const data = event.data as { type?: unknown; item?: unknown } | null;
+        if (!data || data.type !== workItemMessage) return;
+        const item = workItemParse(data.item);
+        if (item === undefined) return;
+        void item; // GHO-207.3.1 red stub: the work item is dropped.
+    });
+    return {
+        get: () => current,
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+    };
+}
+
+const COMPOSER_SELECTOR = '[data-happy-desktop-ui="composer"]';
+export const ORKEST_EMBED_WORK_ITEM_ID = "orkest-work-item";
+
+/** The few DOM members the chip needs, so the placement runs against a fake in tests. */
+export interface OrkestEmbedChipDocument {
+    querySelector(selector: string): OrkestEmbedChipElement | null;
+    getElementById(id: string): OrkestEmbedChipElement | null;
+    createElement(tag: "div"): OrkestEmbedChipElement;
+}
+
+export interface OrkestEmbedChipElement {
+    id: string;
+    textContent: string | null;
+    title: string;
+    readonly style: { cssText: string };
+    setAttribute(name: string, value: string): void;
+    readonly nextElementSibling: unknown;
+    readonly parentElement: { insertBefore(node: unknown, before: unknown): unknown } | null;
+    remove(): void;
+}
+
+const CHIP_STYLE =
+    "display:inline-flex;align-items:center;gap:6px;max-width:calc(100% - 24px);margin:0 12px 6px;" +
+    "padding:2px 10px;border:1px solid currentColor;border-radius:999px;font-size:12px;line-height:18px;" +
+    "opacity:0.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:flex-start;";
+
+/**
+ * Show the work item as a chip right above the composer, or remove the chip for null. It is placed again when the
+ * composer is re-rendered somewhere else; a document with no composer yet shows nothing.
+ */
+export function orkestEmbedWorkItemPlace(doc: OrkestEmbedChipDocument, item: OrkestEmbedWorkItem | null): void {
+    if (doc) return; // GHO-207.3.1 red stub: no chip.
+    const existing = doc.getElementById(ORKEST_EMBED_WORK_ITEM_ID);
+    if (item === null) {
+        existing?.remove();
+        return;
+    }
+    const composer = doc.querySelector(COMPOSER_SELECTOR);
+    if (!composer?.parentElement) return;
+    const chip = existing ?? doc.createElement("div");
+    if (!existing) {
+        chip.id = ORKEST_EMBED_WORK_ITEM_ID;
+        chip.setAttribute("data-orkest-work-item", "");
+        chip.setAttribute("role", "note");
+        chip.style.cssText = CHIP_STYLE;
+    }
+    const text = item.title ? `${item.label} · ${item.title}` : item.label;
+    if (chip.textContent !== text) chip.textContent = text;
+    if (chip.title !== `This chat is about ${text}`) {
+        chip.title = `This chat is about ${text}`;
+        chip.setAttribute("aria-label", `Work item ${text}`);
+    }
+    if (chip.nextElementSibling !== composer) composer.parentElement.insertBefore(chip, composer);
+}
+
+/**
+ * Keep the chip in place: on every work item GhostShell sends and whenever the document changes (`observe` is a
+ * MutationObserver over the body in the app).
+ */
+export function orkestEmbedWorkItemFollow(input: {
+    readonly doc: OrkestEmbedChipDocument;
+    readonly source: OrkestEmbedWorkItemSource;
+    readonly observe: (callback: () => void) => () => void;
+}): () => void {
+    const place = () => orkestEmbedWorkItemPlace(input.doc, input.source.get());
+    const stops = [input.source.subscribe(place), input.observe(place)];
+    place();
+    return () => {
+        for (const stop of stops) stop();
     };
 }

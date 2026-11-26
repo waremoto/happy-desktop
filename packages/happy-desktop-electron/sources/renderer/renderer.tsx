@@ -130,7 +130,10 @@ import {
     orkestBridgeEndpoint,
     orkestEmbedChatFollow,
     orkestEmbedEnabled,
+    orkestEmbedComposeCreate,
     orkestEmbedModelCreate,
+    orkestEmbedWorkItemCreate,
+    orkestEmbedWorkItemFollow,
     orkestEmbedScrollCreate,
     orkestEmbedThemeCreate,
     orkestEmbedSidebarFollow,
@@ -1787,6 +1790,7 @@ if (mediaPreviewBridge) {
                 orkestEmbedChatFollow({
                     scroll: orkestEmbedScrollCreate(window),
                     model: orkestEmbedModelCreate(window),
+                    compose: orkestEmbedComposeCreate(window),
                     workspace: {
                         get: () => {
                             const directory = happyAgents.get();
@@ -1795,6 +1799,19 @@ if (mediaPreviewBridge) {
                                 ?.workspace;
                         },
                         subscribe: happyAgents.subscribe,
+                    },
+                }),
+            );
+        // GHO-207.3.1 — a ticket chat names its work item in a chip above the composer, not in a drafted message.
+        if (orkestEmbed)
+            appDisposers.push(
+                orkestEmbedWorkItemFollow({
+                    doc: document as never,
+                    source: orkestEmbedWorkItemCreate(window),
+                    observe: (callback) => {
+                        const observer = new MutationObserver(callback);
+                        observer.observe(document.body, { childList: true, subtree: true });
+                        return () => observer.disconnect();
                     },
                 }),
             );
