@@ -440,7 +440,8 @@ export function orkestEmbedComposeCreate(win: EmbedWindow): OrkestEmbedComposeSo
         if (typeof data.text !== "string") return;
         const text = data.text.trim();
         if (text.length === 0 || text.length > ORKEST_EMBED_COMPOSE_MAX) return;
-        void text; // GHO-207.3.2 red stub: the suggestion is dropped.
+        pending = text;
+        for (const listener of listeners) listener(text);
     });
     return {
         take() {
@@ -493,7 +494,8 @@ export function orkestEmbedWorkItemCreate(win: EmbedWindow): OrkestEmbedWorkItem
         if (!data || data.type !== workItemMessage) return;
         const item = workItemParse(data.item);
         if (item === undefined) return;
-        void item; // GHO-207.3.1 red stub: the work item is dropped.
+        current = item;
+        for (const listener of listeners) listener(item);
     });
     return {
         get: () => current,
@@ -535,7 +537,6 @@ const CHIP_STYLE =
  * composer is re-rendered somewhere else; a document with no composer yet shows nothing.
  */
 export function orkestEmbedWorkItemPlace(doc: OrkestEmbedChipDocument, item: OrkestEmbedWorkItem | null): void {
-    if (doc) return; // GHO-207.3.1 red stub: no chip.
     const existing = doc.getElementById(ORKEST_EMBED_WORK_ITEM_ID);
     if (item === null) {
         existing?.remove();
