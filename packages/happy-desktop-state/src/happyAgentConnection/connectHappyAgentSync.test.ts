@@ -1969,6 +1969,41 @@ it("starts a read-ahead pass over when the sidebar scrolls during it, after the 
     expect(historyReads(daemon)).toEqual(["agent-1", "agent-7", "agent-6", "agent-5"]);
 });
 
+it("preserves the new shared-chat question when an older refresh returns empty", async () => {
+    const { connection, daemon } = harnessOpen();
+    const project = daemon.projectSeed({ id: "project" });
+    const agent = daemon.agentSeed(project.id, { id: "agent", pendingQuestionId: "q1" });
+    const question: Question = {
+        id: "q1", agentId: agent.id, runId: "r1", status: "pending", questions: [],
+        autoResolveAt: null, answers: null, version: daemon.versionNext(), createdAt: 1, answeredAt: null,
+    };
+    daemon.questionSet(agent.id, question);
+    const groups = groupsWatch(connection);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    const watched = sessionWatch(connection, agent.id);
+    await vi.waitFor(() => expect(watched.session?.pendingUserInputs).toHaveLength(1));
+    let complete!: () => void;
+    const delayed = vi.spyOn(daemon.client, "getPendingQuestion").mockImplementationOnce(() =>
+        new Promise(resolve => { complete = () => resolve({ question: null }); }));
+    daemon.eventEmit("question.updated", {
+        questionId: question.id, previousVersion: daemon.versionNext(), version: daemon.versionNext(),
+        changes: { updatedAt: 2 } as never,
+    });
+    await vi.waitFor(() => expect(delayed).toHaveBeenCalled());
+    const next = { ...question, id: "q2", version: daemon.versionNext() };
+    daemon.questionSet(agent.id, next);
+    daemon.eventEmit("agent.updated", {
+        agentId: agent.id, previousVersion: agent.version, version: daemon.versionNext(),
+        changes: { pendingQuestionId: next.id },
+    });
+    daemon.eventEmit("question.created", { question: next });
+    const pending = () => watched.session?.pendingUserInputs?.map(q => q.requestId);
+    await vi.waitFor(() => expect(pending()).toEqual(["q2"]));
+    complete();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(pending()).toEqual(["q2"]);
+});
+
 it("keeps an open session's question current while another loads in the background", async () => {
     const { connection, daemon } = harnessOpen();
     const project = daemon.projectSeed({ id: "project-a" });
