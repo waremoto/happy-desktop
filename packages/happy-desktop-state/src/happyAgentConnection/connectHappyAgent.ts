@@ -2494,6 +2494,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                                         signal: rootController.signal,
                                     })
                                     .then(({ question }) => {
+                                        if (sessions.get(entry.id) !== entry ||
+                                            entry.agent?.pendingQuestionId !== event.payload.questionId ||
+                                            (question && question.id !== event.payload.questionId)) return;
                                         if (
                                             question === null ||
                                             entry.question === undefined ||
@@ -3131,10 +3134,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     return;
                 }
                 try {
+                    const pendingId = entry.agent?.pendingQuestionId;
                     const response = await client.getPendingQuestion(entry.id, {
                         signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
                     });
                     if (sessions.get(entry.id) !== entry) return;
+                    // Another view may have answered while the reconnect snapshot was in flight.
+                    if (entry.agent?.pendingQuestionId !== pendingId ||
+                        (response.question && response.question.id !== pendingId)) continue;
                     if (
                         (response.question === null &&
                             (entry.question === undefined || entry.question === null)) ||
